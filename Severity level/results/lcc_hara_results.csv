@@ -1,0 +1,21 @@
+﻿run_id,subclass,shock_duration_sec,side_collision,delta_v_ego_mps,delta_v_target_mps,effective_side_dv_mps,barrier_collision,barrier_impact_type,barrier_impact_mps,ditch_departure_actor,departure_speed_mps,max_lateral_slip_mps,wheel_furrowing_triggered,max_roll_pitch_deg,ditch_3d_dv_mps,severity,scenario_outcome
+1,SUBCLASS_A_BARRIER,0.985,False,,,,False,,,None,,,False,,,S0,Без столкновений
+2,SUBCLASS_A_BARRIER,0.783,True,1.64,2.86,2.86,True,Side-swipe,6.09,None,,,False,,,S2,Боковой удар с целевым ТС + Side-swipe удар в отбойник
+3,SUBCLASS_A_BARRIER,0.734,False,,,,False,,,None,,,False,,,S0,Без столкновений
+4,SUBCLASS_A_BARRIER,0.823,False,,,,False,,,None,,,False,,,S0,Без столкновений
+5,SUBCLASS_A_BARRIER,0.65,True,1.74,3.04,3.04,False,,,None,,,False,,,S1,Боковой удар с целевым ТС (Без удара в отбойник)
+6,SUBCLASS_A_BARRIER,0.95,False,,,,False,,,None,,,False,,,S0,Без столкновений
+7,SUBCLASS_A_BARRIER,0.817,True,1.68,2.93,2.93,False,,,None,,,False,,,S1,Боковой удар с целевым ТС (Без удара в отбойник)
+8,SUBCLASS_A_BARRIER,0.904,True,1.43,2.5,2.5,True,Side-swipe,7.3,None,,,False,,,S2,Боковой удар с целевым ТС + Side-swipe удар в отбойник
+9,SUBCLASS_A_BARRIER,1.037,True,1.67,2.92,2.92,False,,,None,,,False,,,S1,Боковой удар с целевым ТС (Без удара в отбойник)
+10,SUBCLASS_A_BARRIER,0.674,True,1.75,3.05,3.05,True,Side-swipe,6.16,None,,,False,,,S2,Боковой удар с целевым ТС + Side-swipe удар в отбойник
+11,SUBCLASS_C_DITCH,0.774,True,1.69,2.94,2.94,False,,,both,26.13,7.48,True,18.7,5.47,S1,Боковой удар с целевым ТС + Вылет в кювет (both) с зарыванием в грунт (S1)
+12,SUBCLASS_C_DITCH,0.668,True,1.7,2.97,2.97,False,,,both,26.89,5.81,True,12.0,5.02,S1,Боковой удар с целевым ТС + Вылет в кювет (both) с зарыванием в грунт (S1)
+13,SUBCLASS_C_DITCH,0.941,False,,,,False,,,None,,,False,,,S0,Без столкновений
+14,SUBCLASS_C_DITCH,0.973,True,1.72,3.01,3.01,False,,,both,26.89,13.29,True,12.1,11.48,S2,Боковой удар с целевым ТС + Вылет в кювет (both) с зарыванием в грунт (S2)
+15,SUBCLASS_C_DITCH,1.05,True,1.71,2.99,2.99,False,,,both,27.06,8.86,True,12.1,3.12,S1,Боковой удар с целевым ТС + Вылет в кювет (both) с зарыванием в грунт (S1)
+16,SUBCLASS_C_DITCH,0.788,True,1.62,2.83,2.83,False,,,both,25.74,15.01,True,14.9,4.63,S1,Боковой удар с целевым ТС + Вылет в кювет (both) с зарыванием в грунт (S1)
+17,SUBCLASS_C_DITCH,0.875,True,1.72,3.0,3.0,False,,,target,25.18,0.04,False,0.7,2.43,S1,Боковой удар с целевым ТС + Съезд в кювет (target) без опрокидывания (S1)
+18,SUBCLASS_C_DITCH,0.735,True,1.73,3.02,3.02,False,,,both,26.77,5.51,True,13.3,2.87,S1,Боковой удар с целевым ТС + Вылет в кювет (both) с зарыванием в грунт (S1)
+19,SUBCLASS_C_DITCH,0.963,False,,,,False,,,None,,,False,,,S0,Без столкновений
+20,SUBCLASS_C_DITCH,0.931,False,,,,False,,,None,,,False,,,S0,Без столкновений
