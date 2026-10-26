@@ -198,6 +198,8 @@ class AutopilotManager:
         self.ego_vehicle = None
         self.target_vehicle = None
         self.configured = False
+        self.is_running = False
+        self.spectator = None
         self.tick_count = 0
         self.callback_id = None
 
@@ -279,6 +281,9 @@ class AutopilotManager:
         hist = self.speed_history.get(frame - 1)
         if not hist:
             hist = self.speed_history.get(frame)
+        if not hist and self.speed_history:
+            closest_frame = max(self.speed_history.keys())
+            hist = self.speed_history[closest_frame]
         if not hist:
             return
 
@@ -355,6 +360,19 @@ class AutopilotManager:
         # 2. Вторичный удар об отбойник (Подкласс А) для Ego или Target
         # ----------------------------------------------------------------------
         else:
+            # Проверяем, что удар совершен именно об отбойник (зона бетонного ограждения Y <= 1.0 м)
+            actor_veh = self.ego_vehicle if source_actor == 'ego' else self.target_vehicle
+            if actor_veh is None:
+                return
+            try:
+                loc_y = actor_veh.get_location().y
+            except Exception:
+                return
+            if loc_y > 1.0:
+                # В зоне обочины/кювета (Y >= 7.5 м) контакт с грунтом или дорожной поверхностью
+                # не является ударом о бетонный отбойник New Jersey
+                return
+
             # Извлекаем кинематику именно того ТС, которое совершило столкновение
             if source_actor == 'ego':
                 v_actor = ego_v
@@ -435,9 +453,14 @@ class AutopilotManager:
 
         # Замер метрик и физика действуют строго в пределах рельефа карты
         if loc.y > 21.0 or loc.z < -2.0:
-            # ТС за пределами рельефа карты — принудительно гасим скорость
-            vehicle.set_target_velocity(carla.Vector3D(0.0, 0.0, 0.0))
-            vehicle.set_target_angular_velocity(carla.Vector3D(0.0, 0.0, 0.0))
+            # ТС за пределами рельефа карты — фиксируем скорость и динамику PhysX,
+            # предотвращая падение в бесконечную пустоту (UE4 KillZ crash)
+            try:
+                vehicle.set_target_velocity(carla.Vector3D(0.0, 0.0, 0.0))
+                vehicle.set_target_angular_velocity(carla.Vector3D(0.0, 0.0, 0.0))
+                vehicle.set_simulate_physics(False)
+            except Exception:
+                pass
             return
 
         tf = vehicle.get_transform()
@@ -618,7 +641,9 @@ class AutopilotManager:
 
                 # Сопротивление подъему на обратный откос кювета (Y >= 15.5 м)
                 if loc.y >= 15.5:
-                    vehicle.add_force(carla.Vector3D(x=0.0, y=-0.35 * mass * 9.81, z=0.0))
+                    y_scale = 1.20 if loc.y >= 20.0 else 0.35
+                    f_brake_x = -v_vec.x * mass * 0.5 if loc.y >= 20.0 else 0.0
+                    vehicle.add_force(carla.Vector3D(x=f_brake_x, y=-y_scale * mass * 9.81, z=0.0))
 
                 # Реалистичный опрокидывающий момент спотыкания (Soil Tripping Torque)
                 if abs(v_lat) > 3.2:
@@ -641,6 +666,8 @@ class AutopilotManager:
     # Основной цикл симуляции (on_tick)
     # --------------------------------------------------------------------------
     def on_tick(self, snapshot):
+        if not self.is_running:
+            return
         try:
             # ------------------------------------------------------------------
             # Инициализация и конфигурация актеров при старте
@@ -719,6 +746,10 @@ class AutopilotManager:
                     self.target_collision_sensor.listen(lambda event: self.on_collision(event, source_actor='target'))
 
                     self.configured = True
+                    try:
+                        self.spectator = self.world.get_spectator()
+                    except Exception:
+                        self.spectator = None
                     print(f"[{snapshot.frame}] Актеры сконфигурированы: "
                           f"Ego ({self.ego_vehicle.type_id}, {EGO_MASS} кг, Lane {self.start_lane_id}) | "
                           f"Target ({self.target_vehicle.type_id}, {TARGET_MASS} кг) | "
@@ -770,12 +801,15 @@ class AutopilotManager:
                     for k in old_keys:
                         del self.speed_history[k]
 
-                # Камера зрителя следует за Ego
-                spectator = self.world.get_spectator()
-                cam_loc = ego_loc - (ego_fw * 12.0) + carla.Location(z=4.5)
-                cam_rot = ego_snap.get_transform().rotation
-                cam_rot.pitch -= 14.0
-                spectator.set_transform(carla.Transform(cam_loc, cam_rot))
+                # Камера зрителя следует за Ego (без блокирующих RPC)
+                if self.spectator is not None:
+                    try:
+                        cam_loc = ego_loc - (ego_fw * 12.0) + carla.Location(z=4.5)
+                        cam_rot = ego_snap.get_transform().rotation
+                        cam_rot.pitch -= 14.0
+                        self.spectator.set_transform(carla.Transform(cam_loc, cam_rot))
+                    except Exception:
+                        pass
 
                 self.tick_count += 1
 
@@ -1032,17 +1066,31 @@ class AutopilotManager:
             return ''
 
     def start(self):
+        self.is_running = True
         self.callback_id = self.world.on_tick(self.on_tick)
 
     def stop(self):
-        if self.callback_id is not None:
-            self.world.remove_on_tick(self.callback_id)
+        self.is_running = False
+        self.spectator = None
+        if self.world is not None and self.callback_id is not None:
+            try:
+                self.world.remove_on_tick(self.callback_id)
+            except Exception:
+                pass
             self.callback_id = None
-        if self.ego_collision_sensor is not None and self.ego_collision_sensor.is_alive:
-            self.ego_collision_sensor.destroy()
+        if self.ego_collision_sensor is not None:
+            try:
+                if self.ego_collision_sensor.is_alive:
+                    self.ego_collision_sensor.destroy()
+            except Exception:
+                pass
             self.ego_collision_sensor = None
-        if self.target_collision_sensor is not None and self.target_collision_sensor.is_alive:
-            self.target_collision_sensor.destroy()
+        if self.target_collision_sensor is not None:
+            try:
+                if self.target_collision_sensor.is_alive:
+                    self.target_collision_sensor.destroy()
+            except Exception:
+                pass
             self.target_collision_sensor = None
         if self.tm is not None:
             try:
@@ -1251,13 +1299,14 @@ def main():
                     elif has_side_hit:
                         outcome = "Боковой удар с целевым ТС (Без удара в отбойник)"
                 else:  # SUBCLASS_C
+                    prefix = "Боковой удар с целевым ТС + " if has_side_hit else ""
                     if ditch_actor != 'None':
                         if max_tilt >= 60.0:
-                            outcome = f"Боковой удар с целевым ТС + Вылет в кювет ({ditch_actor}) с опрокидыванием ({severity})"
+                            outcome = f"{prefix}Вылет в кювет ({ditch_actor}) с опрокидыванием ({severity})"
                         elif furrow_trig:
-                            outcome = f"Боковой удар с целевым ТС + Вылет в кювет ({ditch_actor}) с зарыванием в грунт ({severity})"
+                            outcome = f"{prefix}Вылет в кювет ({ditch_actor}) с зарыванием в грунт ({severity})"
                         else:
-                            outcome = f"Боковой удар с целевым ТС + Съезд в кювет ({ditch_actor}) без опрокидывания ({severity})"
+                            outcome = f"{prefix}Съезд в кювет ({ditch_actor}) без опрокидывания ({severity})"
                     elif has_side_hit:
                         outcome = "Боковой удар с целевым ТС (Без съезда в кювет)"
 
