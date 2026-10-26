@@ -1,0 +1,10 @@
+{
+  "maps": [
+    {
+      "name": "map_ditch",
+      "source": "map_ditch/map_ditch.fbx",
+      "xodr": "map_ditch/map_ditch.xodr",
+      "use_carla_materials": true
+    }
+  ]
+}

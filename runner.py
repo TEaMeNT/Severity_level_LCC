@@ -88,6 +88,7 @@ CARLA_MAP_NAME = "map_ditch"
 DEFAULT_MAP_DIRS = [
     os.path.join(BASE_DIR, "maps", "assets"),
     os.path.join(BASE_DIR, "..", "maps", "assets"),
+    r"C:\Users\teament\Desktop\xlam\Severity_level_LCC\maps\assets",
     r"C:\Users\teament\Desktop\xlam\work\maps\assets",
 ]
 
