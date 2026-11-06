@@ -113,6 +113,10 @@ TARGET_H_CG = 0.52       # Высота центра тяжести целево
 # Коэффициент восстановления при пластической деформации кузовных панелей (SAE J2980)
 RESTITUTION_E = 0.15
 
+# Базовые коэффициенты сцепления дорожных покрытий в шкале CARLA PhysX (SAE J2980)
+ASPHALT_TIRE_FRICTION = 3.50   # Сухой асфальт автомагистрали (штатные полосы движения)
+GRAVEL_TIRE_FRICTION = 1.90    # Укрепленная гравийная обочина (полоса Y in [7.50, 9.75] м)
+
 # Скоростной режим трассы (загородная дорога: ограничение 90 км/ч, крейсерская 100 км/ч)
 SPEED_LIMIT_MPS = 90.0 / 3.6    # 25.0 м/с
 CRUISE_SPEED_MPS = 100.0 / 3.6  # 27.78 м/с
@@ -212,6 +216,7 @@ class AutopilotManager:
         # Датчики столкновений для обоих ТС (ISO 26262-3)
         self.ego_collision_sensor = None
         self.target_collision_sensor = None
+        self.friction_trigger = None
         self.speed_history = {}
 
         # ----------------------------------------------------------------------
@@ -558,13 +563,21 @@ class AutopilotManager:
                     self.tm.ignore_vehicles_percentage(self.target_vehicle, 100)
                     self.tm.vehicle_lane_offset(self.target_vehicle, float(lateral_offset))
 
-                    # Назначение физических масс в движке PhysX (чистая нативная физика подвески)
+                    # Назначение физических масс и базового сцепления сухого асфальта в PhysX (SAE J2980)
                     phys_ego = self.ego_vehicle.get_physics_control()
                     phys_ego.mass = EGO_MASS
+                    ego_wheels = phys_ego.wheels
+                    for w in ego_wheels:
+                        w.tire_friction = ASPHALT_TIRE_FRICTION
+                    phys_ego.wheels = ego_wheels
                     self.ego_vehicle.apply_physics_control(phys_ego)
 
                     phys_target = self.target_vehicle.get_physics_control()
                     phys_target.mass = TARGET_MASS
+                    target_wheels = phys_target.wheels
+                    for w in target_wheels:
+                        w.tire_friction = ASPHALT_TIRE_FRICTION
+                    phys_target.wheels = target_wheels
                     self.target_vehicle.apply_physics_control(phys_target)
 
                     # Инициализация ПИД-контроллера траектории для Ego
@@ -593,6 +606,24 @@ class AutopilotManager:
                         attach_to=self.target_vehicle
                     )
                     self.target_collision_sensor.listen(lambda event: self.on_collision(event, source_actor='target'))
+
+                    # ----------------------------------------------------------
+                    # Внедрение зоны пониженного сцепления (Гравийная обочина) через static.trigger.friction
+                    # Поперечная координата Y in [7.50, 9.75] м (центр Y = 8.625 м, ширина 2.25 м)
+                    # ----------------------------------------------------------
+                    try:
+                        bp_friction = self.world.get_blueprint_library().find('static.trigger.friction')
+                        bp_friction.set_attribute('friction', str(GRAVEL_TIRE_FRICTION))
+                        bp_friction.set_attribute('extent_x', '100000.0')
+                        bp_friction.set_attribute('extent_y', '112.5')
+                        bp_friction.set_attribute('extent_z', '200.0')
+                        friction_transform = carla.Transform(
+                            carla.Location(x=float(ego_loc.x + 500.0), y=8.625, z=0.0)
+                        )
+                        self.friction_trigger = self.world.spawn_actor(bp_friction, friction_transform)
+                    except Exception as e:
+                        print(f"[ПРЕДУПРЕЖДЕНИЕ] Не удалось заспавнить static.trigger.friction: {e}")
+                        self.friction_trigger = None
 
                     self.configured = True
                     try:
@@ -684,9 +715,7 @@ class AutopilotManager:
                 if target_loc.y >= 7.50:
                     try:
                         self.target_vehicle.set_autopilot(False)
-                        target_brake = 0.0 if self.driver_post_shock == 'passive' else (
-                            0.20 if self.driver_post_shock == 'imperfect' else 1.0
-                        )
+                        target_brake = 0.0 if self.driver_post_shock == 'passive' else 1.0
                         self.target_vehicle.apply_control(carla.VehicleControl(
                             throttle=0.0,
                             steer=0.0,
@@ -821,35 +850,7 @@ class AutopilotManager:
                                     manual_gear_shift=False
                                 ))
 
-                            # РЕЖИМ 2: 'imperfect' (Ограниченная реакция в состоянии паники по SAE J2980)
-                            elif self.driver_post_shock == 'imperfect':
-                                target_road_y = 5.625 if self.subclass == SUBCLASS_C else 1.875
-                                lateral_err = ego_loc.y - target_road_y
-
-                                ego_rot = ego_snap.get_transform().rotation
-                                yaw_deg = normalize_deg(ego_rot.yaw)
-                                yaw_rad = math.radians(yaw_deg)
-                                v_lat_lane = ego_v.y
-
-                                raw_steer = -(0.30 * lateral_err + 0.10 * v_lat_lane + 0.35 * yaw_rad)
-                                desired_steer = max(-0.35, min(0.35, raw_steer))
-
-                                steer_delta = desired_steer - self.current_steer
-                                max_step = 4.0 * self.dt
-                                steer_step = max(-max_step, min(max_step, steer_delta))
-                                self.current_steer += steer_step
-
-                                # Умеренное торможение без блокировки колес
-                                brake_cmd = 0.35 if ego_loc.y < 7.50 else 0.20
-                                self.ego_vehicle.apply_control(carla.VehicleControl(
-                                    throttle=0.0,
-                                    steer=float(self.current_steer),
-                                    brake=float(brake_cmd),
-                                    hand_brake=False,
-                                    manual_gear_shift=False
-                                ))
-
-                            # РЕЖИМ 3: 'active' (Агрессивное парирование заноса для исследований Controllability C)
+                            # РЕЖИМ 2: 'active' (Агрессивное парирование заноса для исследований Controllability C)
                             else:
                                 target_road_y = 5.625 if self.subclass == SUBCLASS_C else 1.875
                                 lateral_err = ego_loc.y - target_road_y
@@ -980,6 +981,15 @@ class AutopilotManager:
                 pass
             self.target_collision_sensor = None
 
+        # Обязательное уничтожение физического триггера трения обочины
+        if self.friction_trigger is not None:
+            try:
+                if self.friction_trigger.is_alive:
+                    self.friction_trigger.destroy()
+            except Exception:
+                pass
+            self.friction_trigger = None
+
         if self.tm is not None:
             try:
                 self.tm.set_synchronous_mode(False)
@@ -1003,8 +1013,8 @@ def main():
     parser.add_argument('--subclass', type=str, default='ALL', choices=['A', 'C', 'ALL'],
                         help="Road subclass: 'A' (Barrier), 'C' (Ditch), or 'ALL' (Campaign)")
     parser.add_argument('--driver-post-shock', type=str, default='passive',
-                        choices=['passive', 'imperfect', 'active'],
-                        help="Driver behavior mode after shock phase: 'passive' (default, coasting for pure Severity S), 'imperfect' (panic recovery), or 'active' (full counter-steering for Controllability C)")
+                        choices=['passive', 'active'],
+                        help="Driver behavior mode after shock phase: 'passive' (default, coasting for pure Severity S), or 'active' (full counter-steering for Controllability C)")
     parser.add_argument('--mode', type=str, default='equal', choices=['equal', 'sequential', 'weighted'],
                         help="Campaign mode: 'equal' (50/50: N/2 of A, N/2 of C), 'sequential' (0.2 A / 0.8 C), or 'weighted'")
     parser.add_argument('--runs', type=int, default=20, help="Total number of simulation runs (default: 20)")

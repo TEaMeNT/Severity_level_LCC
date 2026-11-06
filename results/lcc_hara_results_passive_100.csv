@@ -1,0 +1,201 @@
+﻿run_id,subclass,driver_post_shock_mode,shock_duration_sec,side_collision,delta_v_ego_mps,delta_v_target_mps,effective_side_dv_mps,sev_side,barrier_collision,barrier_collision_actor,barrier_impact_type,barrier_impact_mps,sev_barrier,ditch_departure_actor,departure_speed_mps,road_perp_speed_mps,encroachment_angle_deg,vehicle_lat_skid_mps,sideslip_angle_deg,departure_yaw_rate_deg_s,ditch_mechanism,sev_ditch,severity,scenario_outcome
+1,SUBCLASS_A_BARRIER,passive,0.878,True,1.11,1.94,1.94,S1,True,both,Side-swipe,5.36,S1,None,,,,,,,,S0,S1,Боковой удар с целевым ТС + Side-swipe удар в отбойник (both)
+2,SUBCLASS_A_BARRIER,passive,0.676,False,,,,S0,False,None,,,S0,None,,,,,,,,S0,S0,Без столкновений
+3,SUBCLASS_A_BARRIER,passive,0.65,True,0.93,1.62,1.62,S1,True,both,Side-swipe,5.78,S1,None,,,,,,,,S0,S1,Боковой удар с целевым ТС + Side-swipe удар в отбойник (both)
+4,SUBCLASS_A_BARRIER,passive,0.948,True,1.14,2.0,2.0,S1,True,both,Side-swipe,5.93,S1,None,,,,,,,,S0,S1,Боковой удар с целевым ТС + Side-swipe удар в отбойник (both)
+5,SUBCLASS_A_BARRIER,passive,0.752,False,,,,S0,False,None,,,S0,None,,,,,,,,S0,S0,Без столкновений
+6,SUBCLASS_A_BARRIER,passive,0.677,True,1.12,1.95,1.95,S1,True,both,Side-swipe,5.82,S1,None,,,,,,,,S0,S1,Боковой удар с целевым ТС + Side-swipe удар в отбойник (both)
+7,SUBCLASS_A_BARRIER,passive,0.964,True,0.82,1.43,1.43,S1,True,both,Side-swipe,5.83,S1,None,,,,,,,,S0,S1,Боковой удар с целевым ТС + Side-swipe удар в отбойник (both)
+8,SUBCLASS_A_BARRIER,passive,0.848,True,1.1,1.93,1.93,S1,True,both,Side-swipe,5.56,S1,None,,,,,,,,S0,S1,Боковой удар с целевым ТС + Side-swipe удар в отбойник (both)
+9,SUBCLASS_A_BARRIER,passive,1.05,True,0.73,1.28,1.28,S1,True,both,Side-swipe,3.48,S1,None,,,,,,,,S0,S1,Боковой удар с целевым ТС + Side-swipe удар в отбойник (both)
+10,SUBCLASS_A_BARRIER,passive,0.935,False,,,,S0,False,None,,,S0,None,,,,,,,,S0,S0,Без столкновений
+11,SUBCLASS_A_BARRIER,passive,0.862,False,,,,S0,False,None,,,S0,None,,,,,,,,S0,S0,Без столкновений
+12,SUBCLASS_A_BARRIER,passive,0.889,False,,,,S0,False,None,,,S0,None,,,,,,,,S0,S0,Без столкновений
+13,SUBCLASS_A_BARRIER,passive,0.827,True,1.09,1.9,1.9,S1,True,both,Side-swipe,5.71,S1,None,,,,,,,,S0,S1,Боковой удар с целевым ТС + Side-swipe удар в отбойник (both)
+14,SUBCLASS_A_BARRIER,passive,0.905,False,,,,S0,False,None,,,S0,None,,,,,,,,S0,S0,Без столкновений
+15,SUBCLASS_A_BARRIER,passive,0.879,False,,,,S0,False,None,,,S0,None,,,,,,,,S0,S0,Без столкновений
+16,SUBCLASS_A_BARRIER,passive,0.777,True,0.97,1.69,1.69,S1,True,both,Side-swipe,5.21,S1,None,,,,,,,,S0,S1,Боковой удар с целевым ТС + Side-swipe удар в отбойник (both)
+17,SUBCLASS_A_BARRIER,passive,0.909,True,1.16,2.02,2.02,S1,True,both,Side-swipe,4.2,S1,None,,,,,,,,S0,S1,Боковой удар с целевым ТС + Side-swipe удар в отбойник (both)
+18,SUBCLASS_A_BARRIER,passive,0.838,True,1.16,2.03,2.03,S1,True,both,Side-swipe,6.19,S2,None,,,,,,,,S0,S2,Боковой удар с целевым ТС + Side-swipe удар в отбойник (both)
+19,SUBCLASS_A_BARRIER,passive,0.65,False,,,,S0,False,None,,,S0,None,,,,,,,,S0,S0,Без столкновений
+20,SUBCLASS_A_BARRIER,passive,0.933,True,1.13,1.97,1.97,S1,True,both,Side-swipe,5.54,S1,None,,,,,,,,S0,S1,Боковой удар с целевым ТС + Side-swipe удар в отбойник (both)
+21,SUBCLASS_A_BARRIER,passive,0.917,True,1.11,1.93,1.93,S1,True,both,Side-swipe,3.04,S1,None,,,,,,,,S0,S1,Боковой удар с целевым ТС + Side-swipe удар в отбойник (both)
+22,SUBCLASS_A_BARRIER,passive,0.927,True,0.94,1.65,1.65,S1,True,both,Side-swipe,5.37,S1,None,,,,,,,,S0,S1,Боковой удар с целевым ТС + Side-swipe удар в отбойник (both)
+23,SUBCLASS_A_BARRIER,passive,0.969,True,1.1,1.93,1.93,S1,True,both,Side-swipe,5.5,S1,None,,,,,,,,S0,S1,Боковой удар с целевым ТС + Side-swipe удар в отбойник (both)
+24,SUBCLASS_A_BARRIER,passive,0.901,False,,,,S0,False,None,,,S0,None,,,,,,,,S0,S0,Без столкновений
+25,SUBCLASS_A_BARRIER,passive,0.89,True,0.85,1.49,1.49,S1,True,both,Side-swipe,5.48,S1,None,,,,,,,,S0,S1,Боковой удар с целевым ТС + Side-swipe удар в отбойник (both)
+26,SUBCLASS_A_BARRIER,passive,0.869,True,1.14,2.0,2.0,S1,True,both,Side-swipe,5.81,S1,None,,,,,,,,S0,S1,Боковой удар с целевым ТС + Side-swipe удар в отбойник (both)
+27,SUBCLASS_A_BARRIER,passive,0.835,True,1.14,1.98,1.98,S1,True,both,Side-swipe,7.16,S2,None,,,,,,,,S0,S2,Боковой удар с целевым ТС + Side-swipe удар в отбойник (both)
+28,SUBCLASS_A_BARRIER,passive,1.05,True,1.14,2.0,2.0,S1,True,both,Side-swipe,5.99,S1,None,,,,,,,,S0,S1,Боковой удар с целевым ТС + Side-swipe удар в отбойник (both)
+29,SUBCLASS_A_BARRIER,passive,1.006,True,0.93,1.62,1.62,S1,True,both,Side-swipe,5.01,S1,None,,,,,,,,S0,S1,Боковой удар с целевым ТС + Side-swipe удар в отбойник (both)
+30,SUBCLASS_A_BARRIER,passive,0.65,False,,,,S0,False,None,,,S0,None,,,,,,,,S0,S0,Без столкновений
+31,SUBCLASS_A_BARRIER,passive,0.874,False,,,,S0,False,None,,,S0,None,,,,,,,,S0,S0,Без столкновений
+32,SUBCLASS_A_BARRIER,passive,0.832,True,0.94,1.64,1.64,S1,True,both,Side-swipe,5.51,S1,None,,,,,,,,S0,S1,Боковой удар с целевым ТС + Side-swipe удар в отбойник (both)
+33,SUBCLASS_A_BARRIER,passive,0.737,False,,,,S0,False,None,,,S0,None,,,,,,,,S0,S0,Без столкновений
+34,SUBCLASS_A_BARRIER,passive,0.671,False,,,,S0,False,None,,,S0,None,,,,,,,,S0,S0,Без столкновений
+35,SUBCLASS_A_BARRIER,passive,0.768,True,1.03,1.8,1.8,S1,True,both,Side-swipe,6.02,S2,None,,,,,,,,S0,S2,Боковой удар с целевым ТС + Side-swipe удар в отбойник (both)
+36,SUBCLASS_A_BARRIER,passive,0.85,True,1.18,2.07,2.07,S1,True,both,Side-swipe,3.17,S1,None,,,,,,,,S0,S1,Боковой удар с целевым ТС + Side-swipe удар в отбойник (both)
+37,SUBCLASS_A_BARRIER,passive,0.974,False,,,,S0,False,None,,,S0,None,,,,,,,,S0,S0,Без столкновений
+38,SUBCLASS_A_BARRIER,passive,0.986,True,1.12,1.95,1.95,S1,True,both,Side-swipe,5.99,S1,None,,,,,,,,S0,S1,Боковой удар с целевым ТС + Side-swipe удар в отбойник (both)
+39,SUBCLASS_A_BARRIER,passive,0.851,True,1.14,2.0,2.0,S1,True,both,Side-swipe,5.0,S1,None,,,,,,,,S0,S1,Боковой удар с целевым ТС + Side-swipe удар в отбойник (both)
+40,SUBCLASS_A_BARRIER,passive,0.908,True,1.0,1.75,1.75,S1,True,both,Side-swipe,7.72,S2,None,,,,,,,,S0,S2,Боковой удар с целевым ТС + Side-swipe удар в отбойник (both)
+41,SUBCLASS_A_BARRIER,passive,1.008,True,1.14,1.99,1.99,S1,True,both,Side-swipe,5.59,S1,None,,,,,,,,S0,S1,Боковой удар с целевым ТС + Side-swipe удар в отбойник (both)
+42,SUBCLASS_A_BARRIER,passive,0.896,True,1.14,1.99,1.99,S1,True,both,Side-swipe,6.19,S2,ego,1.45,1.04,46.0,0.01,0.5,1.3,Shallow Grazing Departure,S0,S2,Боковой удар с целевым ТС + Side-swipe удар в отбойник (both)
+43,SUBCLASS_A_BARRIER,passive,0.779,True,1.12,1.96,1.96,S1,True,both,Side-swipe,5.77,S1,None,,,,,,,,S0,S1,Боковой удар с целевым ТС + Side-swipe удар в отбойник (both)
+44,SUBCLASS_A_BARRIER,passive,1.011,True,1.12,1.95,1.95,S1,True,both,Side-swipe,5.35,S1,None,,,,,,,,S0,S1,Боковой удар с целевым ТС + Side-swipe удар в отбойник (both)
+45,SUBCLASS_A_BARRIER,passive,0.757,False,,,,S0,False,None,,,S0,None,,,,,,,,S0,S0,Без столкновений
+46,SUBCLASS_A_BARRIER,passive,0.879,True,0.89,1.55,1.55,S1,True,both,Side-swipe,4.95,S1,None,,,,,,,,S0,S1,Боковой удар с целевым ТС + Side-swipe удар в отбойник (both)
+47,SUBCLASS_A_BARRIER,passive,0.849,True,1.08,1.88,1.88,S1,True,both,Side-swipe,5.95,S1,None,,,,,,,,S0,S1,Боковой удар с целевым ТС + Side-swipe удар в отбойник (both)
+48,SUBCLASS_A_BARRIER,passive,0.825,True,1.24,2.16,2.16,S1,True,both,Side-swipe,2.97,S1,None,,,,,,,,S0,S1,Боковой удар с целевым ТС + Side-swipe удар в отбойник (both)
+49,SUBCLASS_A_BARRIER,passive,0.849,True,1.0,1.74,1.74,S1,True,both,Side-swipe,4.54,S1,None,,,,,,,,S0,S1,Боковой удар с целевым ТС + Side-swipe удар в отбойник (both)
+50,SUBCLASS_A_BARRIER,passive,0.803,True,0.94,1.65,1.65,S1,True,both,Side-swipe,5.7,S1,None,,,,,,,,S0,S1,Боковой удар с целевым ТС + Side-swipe удар в отбойник (both)
+51,SUBCLASS_A_BARRIER,passive,0.746,False,,,,S0,False,None,,,S0,None,,,,,,,,S0,S0,Без столкновений
+52,SUBCLASS_A_BARRIER,passive,0.726,False,,,,S0,False,None,,,S0,None,,,,,,,,S0,S0,Без столкновений
+53,SUBCLASS_A_BARRIER,passive,0.875,False,,,,S0,False,None,,,S0,None,,,,,,,,S0,S0,Без столкновений
+54,SUBCLASS_A_BARRIER,passive,1.05,False,,,,S0,False,None,,,S0,None,,,,,,,,S0,S0,Без столкновений
+55,SUBCLASS_A_BARRIER,passive,0.787,False,,,,S0,False,None,,,S0,None,,,,,,,,S0,S0,Без столкновений
+56,SUBCLASS_A_BARRIER,passive,0.826,True,1.04,1.82,1.82,S1,True,both,Side-swipe,5.77,S1,None,,,,,,,,S0,S1,Боковой удар с целевым ТС + Side-swipe удар в отбойник (both)
+57,SUBCLASS_A_BARRIER,passive,0.883,False,,,,S0,False,None,,,S0,None,,,,,,,,S0,S0,Без столкновений
+58,SUBCLASS_A_BARRIER,passive,0.868,False,,,,S0,False,None,,,S0,None,,,,,,,,S0,S0,Без столкновений
+59,SUBCLASS_A_BARRIER,passive,0.723,True,0.95,1.65,1.65,S1,True,both,Side-swipe,4.96,S1,None,,,,,,,,S0,S1,Боковой удар с целевым ТС + Side-swipe удар в отбойник (both)
+60,SUBCLASS_A_BARRIER,passive,0.873,True,1.14,1.98,1.98,S1,True,both,Side-swipe,5.88,S1,None,,,,,,,,S0,S1,Боковой удар с целевым ТС + Side-swipe удар в отбойник (both)
+61,SUBCLASS_A_BARRIER,passive,0.65,True,1.23,2.15,2.15,S1,True,both,Side-swipe,3.82,S1,None,,,,,,,,S0,S1,Боковой удар с целевым ТС + Side-swipe удар в отбойник (both)
+62,SUBCLASS_A_BARRIER,passive,0.791,True,1.14,1.99,1.99,S1,True,both,Side-swipe,5.89,S1,None,,,,,,,,S0,S1,Боковой удар с целевым ТС + Side-swipe удар в отбойник (both)
+63,SUBCLASS_A_BARRIER,passive,0.746,False,,,,S0,False,None,,,S0,None,,,,,,,,S0,S0,Без столкновений
+64,SUBCLASS_A_BARRIER,passive,0.809,True,1.06,1.86,1.86,S1,True,both,Side-swipe,9.58,S2,None,,,,,,,,S0,S2,Боковой удар с целевым ТС + Side-swipe удар в отбойник (both)
+65,SUBCLASS_A_BARRIER,passive,0.801,True,0.91,1.58,1.58,S1,True,both,Side-swipe,5.35,S1,both,8.78,1.68,11.0,0.19,1.2,2.2,Shallow Grazing Departure,S0,S1,Боковой удар с целевым ТС + Side-swipe удар в отбойник (both)
+66,SUBCLASS_A_BARRIER,passive,0.706,False,,,,S0,False,None,,,S0,None,,,,,,,,S0,S0,Без столкновений
+67,SUBCLASS_A_BARRIER,passive,0.798,True,1.14,2.0,2.0,S1,True,both,Side-swipe,4.9,S1,None,,,,,,,,S0,S1,Боковой удар с целевым ТС + Side-swipe удар в отбойник (both)
+68,SUBCLASS_A_BARRIER,passive,0.71,False,,,,S0,False,None,,,S0,None,,,,,,,,S0,S0,Без столкновений
+69,SUBCLASS_A_BARRIER,passive,0.893,True,1.15,2.01,2.01,S1,True,both,Side-swipe,4.77,S1,None,,,,,,,,S0,S1,Боковой удар с целевым ТС + Side-swipe удар в отбойник (both)
+70,SUBCLASS_A_BARRIER,passive,1.05,True,1.15,2.01,2.01,S1,True,both,Side-swipe,3.05,S1,None,,,,,,,,S0,S1,Боковой удар с целевым ТС + Side-swipe удар в отбойник (both)
+71,SUBCLASS_A_BARRIER,passive,0.92,True,0.95,1.65,1.65,S1,True,both,Side-swipe,5.91,S1,None,,,,,,,,S0,S1,Боковой удар с целевым ТС + Side-swipe удар в отбойник (both)
+72,SUBCLASS_A_BARRIER,passive,0.783,True,1.01,1.76,1.76,S1,True,both,Side-swipe,3.99,S1,None,,,,,,,,S0,S1,Боковой удар с целевым ТС + Side-swipe удар в отбойник (both)
+73,SUBCLASS_A_BARRIER,passive,0.65,True,1.03,1.8,1.8,S1,True,both,Side-swipe,7.03,S2,None,,,,,,,,S0,S2,Боковой удар с целевым ТС + Side-swipe удар в отбойник (both)
+74,SUBCLASS_A_BARRIER,passive,1.022,True,1.03,1.8,1.8,S1,True,both,Side-swipe,3.76,S1,None,,,,,,,,S0,S1,Боковой удар с целевым ТС + Side-swipe удар в отбойник (both)
+75,SUBCLASS_A_BARRIER,passive,0.989,True,1.11,1.94,1.94,S1,True,both,Side-swipe,6.21,S2,None,,,,,,,,S0,S2,Боковой удар с целевым ТС + Side-swipe удар в отбойник (both)
+76,SUBCLASS_A_BARRIER,passive,0.729,True,0.95,1.65,1.65,S1,True,both,Side-swipe,6.09,S2,None,,,,,,,,S0,S2,Боковой удар с целевым ТС + Side-swipe удар в отбойник (both)
+77,SUBCLASS_A_BARRIER,passive,0.774,True,1.13,1.96,1.96,S1,True,both,Side-swipe,6.27,S2,None,,,,,,,,S0,S2,Боковой удар с целевым ТС + Side-swipe удар в отбойник (both)
+78,SUBCLASS_A_BARRIER,passive,0.722,False,,,,S0,False,None,,,S0,None,,,,,,,,S0,S0,Без столкновений
+79,SUBCLASS_A_BARRIER,passive,0.94,False,,,,S0,False,None,,,S0,None,,,,,,,,S0,S0,Без столкновений
+80,SUBCLASS_A_BARRIER,passive,0.954,True,0.91,1.59,1.59,S1,True,both,Side-swipe,5.72,S1,None,,,,,,,,S0,S1,Боковой удар с целевым ТС + Side-swipe удар в отбойник (both)
+81,SUBCLASS_A_BARRIER,passive,0.769,True,1.13,1.98,1.98,S1,True,ego,Side-swipe,3.71,S1,None,,,,,,,,S0,S1,Боковой удар с целевым ТС + Side-swipe удар в отбойник (ego)
+82,SUBCLASS_A_BARRIER,passive,0.845,False,,,,S0,False,None,,,S0,None,,,,,,,,S0,S0,Без столкновений
+83,SUBCLASS_A_BARRIER,passive,0.802,False,,,,S0,False,None,,,S0,None,,,,,,,,S0,S0,Без столкновений
+84,SUBCLASS_A_BARRIER,passive,0.663,True,1.25,2.18,2.18,S1,True,both,Side-swipe,5.18,S1,None,,,,,,,,S0,S1,Боковой удар с целевым ТС + Side-swipe удар в отбойник (both)
+85,SUBCLASS_A_BARRIER,passive,0.65,False,,,,S0,False,None,,,S0,None,,,,,,,,S0,S0,Без столкновений
+86,SUBCLASS_A_BARRIER,passive,0.9,True,1.04,1.82,1.82,S1,True,both,Side-swipe,5.07,S1,None,,,,,,,,S0,S1,Боковой удар с целевым ТС + Side-swipe удар в отбойник (both)
+87,SUBCLASS_A_BARRIER,passive,0.998,False,,,,S0,False,None,,,S0,None,,,,,,,,S0,S0,Без столкновений
+88,SUBCLASS_A_BARRIER,passive,0.889,True,1.15,2.0,2.0,S1,True,both,Side-swipe,5.87,S1,None,,,,,,,,S0,S1,Боковой удар с целевым ТС + Side-swipe удар в отбойник (both)
+89,SUBCLASS_A_BARRIER,passive,0.803,False,,,,S0,False,None,,,S0,None,,,,,,,,S0,S0,Без столкновений
+90,SUBCLASS_A_BARRIER,passive,0.781,True,1.13,1.96,1.96,S1,True,both,Side-swipe,5.8,S1,None,,,,,,,,S0,S1,Боковой удар с целевым ТС + Side-swipe удар в отбойник (both)
+91,SUBCLASS_A_BARRIER,passive,0.998,False,,,,S0,False,None,,,S0,None,,,,,,,,S0,S0,Без столкновений
+92,SUBCLASS_A_BARRIER,passive,0.703,False,,,,S0,False,None,,,S0,None,,,,,,,,S0,S0,Без столкновений
+93,SUBCLASS_A_BARRIER,passive,0.923,False,,,,S0,False,None,,,S0,None,,,,,,,,S0,S0,Без столкновений
+94,SUBCLASS_A_BARRIER,passive,0.827,False,,,,S0,False,None,,,S0,None,,,,,,,,S0,S0,Без столкновений
+95,SUBCLASS_A_BARRIER,passive,0.875,True,0.87,1.52,1.52,S1,True,both,Side-swipe,5.13,S1,None,,,,,,,,S0,S1,Боковой удар с целевым ТС + Side-swipe удар в отбойник (both)
+96,SUBCLASS_A_BARRIER,passive,0.84,True,0.87,1.52,1.52,S1,True,both,Side-swipe,5.62,S1,None,,,,,,,,S0,S1,Боковой удар с целевым ТС + Side-swipe удар в отбойник (both)
+97,SUBCLASS_A_BARRIER,passive,0.749,False,,,,S0,False,None,,,S0,None,,,,,,,,S0,S0,Без столкновений
+98,SUBCLASS_A_BARRIER,passive,0.683,True,1.2,2.1,2.1,S1,True,both,Side-swipe,6.14,S2,None,,,,,,,,S0,S2,Боковой удар с целевым ТС + Side-swipe удар в отбойник (both)
+99,SUBCLASS_A_BARRIER,passive,0.801,False,,,,S0,False,None,,,S0,None,,,,,,,,S0,S0,Без столкновений
+100,SUBCLASS_A_BARRIER,passive,0.77,False,,,,S0,False,None,,,S0,None,,,,,,,,S0,S0,Без столкновений
+101,SUBCLASS_C_DITCH,passive,0.777,True,0.95,1.65,1.65,S1,False,None,,,S0,both,26.35,4.4,9.6,0.16,0.4,0.4,Traversable Tracking Slope Departure,S1,S1,Боковой удар с целевым ТС + Traversable Tracking Slope Departure (both) (S1)
+102,SUBCLASS_C_DITCH,passive,0.65,False,,,,S0,False,None,,,S0,None,,,,,,,,S0,S0,Без столкновений
+103,SUBCLASS_C_DITCH,passive,0.843,False,,,,S0,False,None,,,S0,None,,,,,,,,S0,S0,Без столкновений
+104,SUBCLASS_C_DITCH,passive,0.903,True,1.03,1.79,1.79,S1,False,None,,,S0,both,25.92,8.79,19.8,0.19,0.4,0.6,Hard Ditch Bottom Impact,S2,S2,Боковой удар с целевым ТС + Hard Ditch Bottom Impact (both) (S2)
+105,SUBCLASS_C_DITCH,passive,0.777,False,,,,S0,False,None,,,S0,None,,,,,,,,S0,S0,Без столкновений
+106,SUBCLASS_C_DITCH,passive,0.818,False,,,,S0,False,None,,,S0,None,,,,,,,,S0,S0,Без столкновений
+107,SUBCLASS_C_DITCH,passive,0.903,True,0.98,1.72,1.72,S1,True,ego,Side-swipe,8.85,S2,target,7.29,5.01,43.4,0.16,1.3,1.9,Shallow Grazing Departure,S0,S2,Боковой удар с целевым ТС + Shallow Grazing Departure (target) (S2)
+108,SUBCLASS_C_DITCH,passive,0.736,False,,,,S0,False,None,,,S0,None,,,,,,,,S0,S0,Без столкновений
+109,SUBCLASS_C_DITCH,passive,0.895,False,,,,S0,False,None,,,S0,None,,,,,,,,S0,S0,Без столкновений
+110,SUBCLASS_C_DITCH,passive,0.975,False,,,,S0,False,None,,,S0,None,,,,,,,,S0,S0,Без столкновений
+111,SUBCLASS_C_DITCH,passive,0.688,True,1.08,1.88,1.88,S1,False,None,,,S0,both,27.27,4.08,8.6,0.2,0.4,0.0,Traversable Tracking Slope Departure,S1,S1,Боковой удар с целевым ТС + Traversable Tracking Slope Departure (both) (S1)
+112,SUBCLASS_C_DITCH,passive,0.783,True,1.14,1.99,1.99,S1,False,None,,,S0,both,26.11,6.58,14.6,0.05,0.1,1.4,Hard Ditch Bottom Impact,S2,S2,Боковой удар с целевым ТС + Hard Ditch Bottom Impact (both) (S2)
+113,SUBCLASS_C_DITCH,passive,0.801,False,,,,S0,False,None,,,S0,None,,,,,,,,S0,S0,Без столкновений
+114,SUBCLASS_C_DITCH,passive,0.779,True,0.97,1.69,1.69,S1,False,None,,,S0,both,26.37,4.71,10.3,0.13,0.3,0.7,Traversable Tracking Slope Departure,S1,S1,Боковой удар с целевым ТС + Traversable Tracking Slope Departure (both) (S1)
+115,SUBCLASS_C_DITCH,passive,0.745,False,,,,S0,False,None,,,S0,None,,,,,,,,S0,S0,Без столкновений
+116,SUBCLASS_C_DITCH,passive,0.97,False,,,,S0,False,None,,,S0,None,,,,,,,,S0,S0,Без столкновений
+117,SUBCLASS_C_DITCH,passive,1.05,True,0.95,1.65,1.65,S1,False,None,,,S0,both,25.9,7.42,16.6,0.06,0.1,0.3,Hard Ditch Bottom Impact,S2,S2,Боковой удар с целевым ТС + Hard Ditch Bottom Impact (both) (S2)
+118,SUBCLASS_C_DITCH,passive,0.811,True,1.12,1.95,1.95,S1,False,None,,,S0,both,25.85,6.86,15.4,0.02,0.0,1.2,Hard Ditch Bottom Impact,S2,S2,Боковой удар с целевым ТС + Hard Ditch Bottom Impact (both) (S2)
+119,SUBCLASS_C_DITCH,passive,0.776,True,1.03,1.81,1.81,S1,False,None,,,S0,both,26.27,5.26,11.6,0.1,0.2,1.0,Traversable Tracking Slope Departure,S1,S1,Боковой удар с целевым ТС + Traversable Tracking Slope Departure (both) (S1)
+120,SUBCLASS_C_DITCH,passive,0.972,False,,,,S0,False,None,,,S0,None,,,,,,,,S0,S0,Без столкновений
+121,SUBCLASS_C_DITCH,passive,0.876,False,,,,S0,False,None,,,S0,None,,,,,,,,S0,S0,Без столкновений
+122,SUBCLASS_C_DITCH,passive,0.828,True,1.14,1.99,1.99,S1,False,None,,,S0,both,23.63,1.69,4.1,0.31,0.7,0.8,Shallow Grazing Departure,S0,S1,Боковой удар с целевым ТС + Shallow Grazing Departure (both) (S1)
+123,SUBCLASS_C_DITCH,passive,1.05,False,,,,S0,False,None,,,S0,None,,,,,,,,S0,S0,Без столкновений
+124,SUBCLASS_C_DITCH,passive,0.771,True,1.1,1.93,1.93,S1,False,None,,,S0,both,26.25,5.77,12.7,0.04,0.1,1.3,Traversable Tracking Slope Departure,S1,S1,Боковой удар с целевым ТС + Traversable Tracking Slope Departure (both) (S1)
+125,SUBCLASS_C_DITCH,passive,0.984,False,,,,S0,False,None,,,S0,None,,,,,,,,S0,S0,Без столкновений
+126,SUBCLASS_C_DITCH,passive,0.925,False,,,,S0,False,None,,,S0,None,,,,,,,,S0,S0,Без столкновений
+127,SUBCLASS_C_DITCH,passive,0.829,False,,,,S0,False,None,,,S0,None,,,,,,,,S0,S0,Без столкновений
+128,SUBCLASS_C_DITCH,passive,0.759,True,1.13,1.98,1.98,S1,False,None,,,S0,ego,24.01,1.92,4.6,0.31,0.7,0.9,Shallow Grazing Departure,S0,S1,Боковой удар с целевым ТС + Shallow Grazing Departure (ego) (S1)
+129,SUBCLASS_C_DITCH,passive,0.894,False,,,,S0,False,None,,,S0,None,,,,,,,,S0,S0,Без столкновений
+130,SUBCLASS_C_DITCH,passive,0.872,False,,,,S0,False,None,,,S0,None,,,,,,,,S0,S0,Без столкновений
+131,SUBCLASS_C_DITCH,passive,0.945,False,,,,S0,False,None,,,S0,None,,,,,,,,S0,S0,Без столкновений
+132,SUBCLASS_C_DITCH,passive,0.872,False,,,,S0,False,None,,,S0,None,,,,,,,,S0,S0,Без столкновений
+133,SUBCLASS_C_DITCH,passive,0.922,True,1.08,1.89,1.89,S1,False,None,,,S0,both,25.93,7.27,16.3,0.08,0.2,0.2,Hard Ditch Bottom Impact,S2,S2,Боковой удар с целевым ТС + Hard Ditch Bottom Impact (both) (S2)
+134,SUBCLASS_C_DITCH,passive,0.854,True,1.05,1.83,1.83,S1,False,None,,,S0,both,26.3,5.19,11.4,0.09,0.2,1.0,Traversable Tracking Slope Departure,S1,S1,Боковой удар с целевым ТС + Traversable Tracking Slope Departure (both) (S1)
+135,SUBCLASS_C_DITCH,passive,0.793,True,1.13,1.98,1.98,S1,False,None,,,S0,both,27.93,2.74,5.6,0.25,0.5,0.3,Traversable Tracking Slope Departure,S1,S1,Боковой удар с целевым ТС + Traversable Tracking Slope Departure (both) (S1)
+136,SUBCLASS_C_DITCH,passive,0.813,False,,,,S0,False,None,,,S0,None,,,,,,,,S0,S0,Без столкновений
+137,SUBCLASS_C_DITCH,passive,1.04,False,,,,S0,False,None,,,S0,None,,,,,,,,S0,S0,Без столкновений
+138,SUBCLASS_C_DITCH,passive,0.784,True,1.1,1.93,1.93,S1,False,None,,,S0,both,26.17,5.87,13.0,0.03,0.1,1.3,Traversable Tracking Slope Departure,S1,S1,Боковой удар с целевым ТС + Traversable Tracking Slope Departure (both) (S1)
+139,SUBCLASS_C_DITCH,passive,0.65,False,,,,S0,False,None,,,S0,None,,,,,,,,S0,S0,Без столкновений
+140,SUBCLASS_C_DITCH,passive,0.945,True,0.95,1.66,1.66,S1,False,None,,,S0,both,25.73,7.18,16.2,0.03,0.1,1.0,Hard Ditch Bottom Impact,S2,S2,Боковой удар с целевым ТС + Hard Ditch Bottom Impact (both) (S2)
+141,SUBCLASS_C_DITCH,passive,0.889,True,0.93,1.62,1.62,S1,False,None,,,S0,both,26.42,4.62,10.1,0.15,0.3,0.4,Traversable Tracking Slope Departure,S1,S1,Боковой удар с целевым ТС + Traversable Tracking Slope Departure (both) (S1)
+142,SUBCLASS_C_DITCH,passive,0.797,False,,,,S0,False,None,,,S0,None,,,,,,,,S0,S0,Без столкновений
+143,SUBCLASS_C_DITCH,passive,0.678,True,1.02,1.78,1.78,S1,False,None,,,S0,both,26.36,5.27,11.5,0.1,0.2,0.9,Traversable Tracking Slope Departure,S1,S1,Боковой удар с целевым ТС + Traversable Tracking Slope Departure (both) (S1)
+144,SUBCLASS_C_DITCH,passive,0.871,True,0.93,1.62,1.62,S1,False,None,,,S0,both,26.99,4.67,10.0,0.01,0.0,1.2,Traversable Tracking Slope Departure,S1,S1,Боковой удар с целевым ТС + Traversable Tracking Slope Departure (both) (S1)
+145,SUBCLASS_C_DITCH,passive,0.791,True,0.9,1.57,1.57,S1,False,None,,,S0,both,26.44,4.45,9.7,0.15,0.3,0.4,Traversable Tracking Slope Departure,S1,S1,Боковой удар с целевым ТС + Traversable Tracking Slope Departure (both) (S1)
+146,SUBCLASS_C_DITCH,passive,0.708,True,0.98,1.71,1.71,S1,False,None,,,S0,both,25.75,6.91,15.6,0.0,0.0,1.3,Hard Ditch Bottom Impact,S2,S2,Боковой удар с целевым ТС + Hard Ditch Bottom Impact (both) (S2)
+147,SUBCLASS_C_DITCH,passive,0.681,True,1.18,2.06,2.06,S1,False,None,,,S0,both,26.85,6.53,14.1,0.11,0.2,1.6,Hard Ditch Bottom Impact,S2,S2,Боковой удар с целевым ТС + Hard Ditch Bottom Impact (both) (S2)
+148,SUBCLASS_C_DITCH,passive,0.901,True,0.96,1.68,1.68,S1,False,None,,,S0,both,26.39,5.0,10.9,0.11,0.2,0.9,Traversable Tracking Slope Departure,S1,S1,Боковой удар с целевым ТС + Traversable Tracking Slope Departure (both) (S1)
+149,SUBCLASS_C_DITCH,passive,0.793,True,0.98,1.71,1.71,S1,False,None,,,S0,both,26.33,4.74,10.4,0.13,0.3,0.7,Traversable Tracking Slope Departure,S1,S1,Боковой удар с целевым ТС + Traversable Tracking Slope Departure (both) (S1)
+150,SUBCLASS_C_DITCH,passive,0.94,True,1.1,1.92,1.92,S1,False,None,,,S0,both,24.44,2.03,4.8,0.31,0.7,0.9,Traversable Tracking Slope Departure,S1,S1,Боковой удар с целевым ТС + Traversable Tracking Slope Departure (both) (S1)
+151,SUBCLASS_C_DITCH,passive,0.932,False,,,,S0,False,None,,,S0,None,,,,,,,,S0,S0,Без столкновений
+152,SUBCLASS_C_DITCH,passive,0.954,True,0.89,1.55,1.55,S1,False,None,,,S0,both,26.62,4.63,10.0,0.14,0.3,0.6,Traversable Tracking Slope Departure,S1,S1,Боковой удар с целевым ТС + Traversable Tracking Slope Departure (both) (S1)
+153,SUBCLASS_C_DITCH,passive,0.783,True,1.16,2.03,2.03,S1,False,None,,,S0,both,27.31,6.21,13.2,0.05,0.1,0.8,Hard Ditch Bottom Impact,S2,S2,Боковой удар с целевым ТС + Hard Ditch Bottom Impact (both) (S2)
+154,SUBCLASS_C_DITCH,passive,0.986,True,1.26,2.2,2.2,S1,False,None,,,S0,both,27.47,4.09,8.6,0.18,0.4,0.2,Traversable Tracking Slope Departure,S1,S1,Боковой удар с целевым ТС + Traversable Tracking Slope Departure (both) (S1)
+155,SUBCLASS_C_DITCH,passive,1.042,True,1.14,1.99,1.99,S1,False,None,,,S0,both,26.11,7.32,16.3,0.25,0.5,0.8,Hard Ditch Bottom Impact,S2,S2,Боковой удар с целевым ТС + Hard Ditch Bottom Impact (both) (S2)
+156,SUBCLASS_C_DITCH,passive,0.982,False,,,,S0,False,None,,,S0,None,,,,,,,,S0,S0,Без столкновений
+157,SUBCLASS_C_DITCH,passive,0.681,True,1.04,1.81,1.81,S1,False,None,,,S0,both,25.96,9.88,22.4,1.82,4.0,11.8,Hard Ditch Bottom Impact,S2,S2,Боковой удар с целевым ТС + Hard Ditch Bottom Impact (both) (S2)
+158,SUBCLASS_C_DITCH,passive,0.831,True,1.11,1.94,1.94,S1,False,None,,,S0,both,26.12,5.71,12.6,0.08,0.2,1.0,Traversable Tracking Slope Departure,S1,S1,Боковой удар с целевым ТС + Traversable Tracking Slope Departure (both) (S1)
+159,SUBCLASS_C_DITCH,passive,0.903,True,1.03,1.8,1.8,S1,False,None,,,S0,both,26.32,5.16,11.3,0.11,0.2,0.8,Traversable Tracking Slope Departure,S1,S1,Боковой удар с целевым ТС + Traversable Tracking Slope Departure (both) (S1)
+160,SUBCLASS_C_DITCH,passive,0.66,False,,,,S0,False,None,,,S0,None,,,,,,,,S0,S0,Без столкновений
+161,SUBCLASS_C_DITCH,passive,0.9,False,,,,S0,False,None,,,S0,None,,,,,,,,S0,S0,Без столкновений
+162,SUBCLASS_C_DITCH,passive,0.822,False,,,,S0,False,None,,,S0,None,,,,,,,,S0,S0,Без столкновений
+163,SUBCLASS_C_DITCH,passive,0.65,True,1.25,2.18,2.18,S1,False,None,,,S0,both,27.41,6.21,13.1,0.02,0.0,1.2,Hard Ditch Bottom Impact,S2,S2,Боковой удар с целевым ТС + Hard Ditch Bottom Impact (both) (S2)
+164,SUBCLASS_C_DITCH,passive,0.89,False,,,,S0,False,None,,,S0,None,,,,,,,,S0,S0,Без столкновений
+165,SUBCLASS_C_DITCH,passive,0.947,False,,,,S0,False,None,,,S0,None,,,,,,,,S0,S0,Без столкновений
+166,SUBCLASS_C_DITCH,passive,0.811,True,0.99,1.73,1.73,S1,False,None,,,S0,both,25.89,8.67,19.6,0.15,0.3,0.4,Hard Ditch Bottom Impact,S2,S2,Боковой удар с целевым ТС + Hard Ditch Bottom Impact (both) (S2)
+167,SUBCLASS_C_DITCH,passive,1.005,True,1.14,2.0,2.0,S1,False,None,,,S0,both,25.99,5.92,13.2,0.06,0.1,1.2,Traversable Tracking Slope Departure,S1,S1,Боковой удар с целевым ТС + Traversable Tracking Slope Departure (both) (S1)
+168,SUBCLASS_C_DITCH,passive,0.866,False,,,,S0,False,None,,,S0,None,,,,,,,,S0,S0,Без столкновений
+169,SUBCLASS_C_DITCH,passive,1.008,True,1.04,1.81,1.81,S1,False,None,,,S0,both,26.43,6.61,14.5,0.23,0.5,1.9,Hard Ditch Bottom Impact,S2,S2,Боковой удар с целевым ТС + Hard Ditch Bottom Impact (both) (S2)
+170,SUBCLASS_C_DITCH,passive,0.938,False,,,,S0,False,None,,,S0,None,,,,,,,,S0,S0,Без столкновений
+171,SUBCLASS_C_DITCH,passive,0.733,True,1.08,1.89,1.89,S1,False,None,,,S0,both,26.25,5.48,12.1,0.09,0.2,1.0,Traversable Tracking Slope Departure,S1,S1,Боковой удар с целевым ТС + Traversable Tracking Slope Departure (both) (S1)
+172,SUBCLASS_C_DITCH,passive,0.901,True,0.92,1.6,1.6,S1,False,None,,,S0,both,25.66,6.88,15.5,0.02,0.1,1.5,Hard Ditch Bottom Impact,S2,S2,Боковой удар с целевым ТС + Hard Ditch Bottom Impact (both) (S2)
+173,SUBCLASS_C_DITCH,passive,0.885,True,1.12,1.96,1.96,S1,False,None,,,S0,both,26.17,6.2,13.7,0.01,0.0,1.3,Hard Ditch Bottom Impact,S2,S2,Боковой удар с целевым ТС + Hard Ditch Bottom Impact (both) (S2)
+174,SUBCLASS_C_DITCH,passive,0.937,False,,,,S0,False,None,,,S0,None,,,,,,,,S0,S0,Без столкновений
+175,SUBCLASS_C_DITCH,passive,0.975,True,1.14,1.98,1.98,S1,False,None,,,S0,both,26.15,6.64,14.7,0.08,0.2,1.4,Hard Ditch Bottom Impact,S2,S2,Боковой удар с целевым ТС + Hard Ditch Bottom Impact (both) (S2)
+176,SUBCLASS_C_DITCH,passive,1.0,True,0.99,1.73,1.73,S1,False,None,,,S0,both,26.47,5.5,12.0,0.04,0.1,1.2,Traversable Tracking Slope Departure,S1,S1,Боковой удар с целевым ТС + Traversable Tracking Slope Departure (both) (S1)
+177,SUBCLASS_C_DITCH,passive,0.968,True,1.08,1.89,1.89,S1,False,None,,,S0,both,27.02,4.89,10.4,0.11,0.2,0.8,Traversable Tracking Slope Departure,S1,S1,Боковой удар с целевым ТС + Traversable Tracking Slope Departure (both) (S1)
+178,SUBCLASS_C_DITCH,passive,0.984,True,1.05,1.83,1.83,S1,False,None,,,S0,both,26.29,5.71,12.6,0.04,0.1,1.3,Traversable Tracking Slope Departure,S1,S1,Боковой удар с целевым ТС + Traversable Tracking Slope Departure (both) (S1)
+179,SUBCLASS_C_DITCH,passive,0.852,True,1.13,1.97,1.97,S1,False,None,,,S0,both,26.04,7.59,17.0,0.21,0.5,0.6,Hard Ditch Bottom Impact,S2,S2,Боковой удар с целевым ТС + Hard Ditch Bottom Impact (both) (S2)
+180,SUBCLASS_C_DITCH,passive,0.858,True,0.94,1.65,1.65,S1,False,None,,,S0,both,25.77,7.32,16.5,0.05,0.1,0.5,Hard Ditch Bottom Impact,S2,S2,Боковой удар с целевым ТС + Hard Ditch Bottom Impact (both) (S2)
+181,SUBCLASS_C_DITCH,passive,0.983,False,,,,S0,False,None,,,S0,None,,,,,,,,S0,S0,Без столкновений
+182,SUBCLASS_C_DITCH,passive,0.988,True,1.17,2.04,2.04,S1,False,None,,,S0,both,26.17,9.23,20.6,0.68,1.5,2.8,Hard Ditch Bottom Impact,S2,S2,Боковой удар с целевым ТС + Hard Ditch Bottom Impact (both) (S2)
+183,SUBCLASS_C_DITCH,passive,1.017,True,0.85,1.49,1.49,S1,False,None,,,S0,both,26.7,4.52,9.7,0.13,0.3,0.7,Traversable Tracking Slope Departure,S1,S1,Боковой удар с целевым ТС + Traversable Tracking Slope Departure (both) (S1)
+184,SUBCLASS_C_DITCH,passive,1.029,False,,,,S0,False,None,,,S0,None,,,,,,,,S0,S0,Без столкновений
+185,SUBCLASS_C_DITCH,passive,0.88,False,,,,S0,False,None,,,S0,None,,,,,,,,S0,S0,Без столкновений
+186,SUBCLASS_C_DITCH,passive,0.698,True,1.03,1.8,1.8,S1,False,None,,,S0,both,26.31,5.25,11.5,0.11,0.2,0.8,Traversable Tracking Slope Departure,S1,S1,Боковой удар с целевым ТС + Traversable Tracking Slope Departure (both) (S1)
+187,SUBCLASS_C_DITCH,passive,0.858,True,1.0,1.75,1.75,S1,False,None,,,S0,both,27.54,3.29,6.9,0.23,0.5,0.2,Traversable Tracking Slope Departure,S1,S1,Боковой удар с целевым ТС + Traversable Tracking Slope Departure (both) (S1)
+188,SUBCLASS_C_DITCH,passive,0.839,False,,,,S0,False,None,,,S0,None,,,,,,,,S0,S0,Без столкновений
+189,SUBCLASS_C_DITCH,passive,0.831,False,,,,S0,False,None,,,S0,None,,,,,,,,S0,S0,Без столкновений
+190,SUBCLASS_C_DITCH,passive,0.765,False,,,,S0,False,None,,,S0,None,,,,,,,,S0,S0,Без столкновений
+191,SUBCLASS_C_DITCH,passive,0.684,False,,,,S0,False,None,,,S0,None,,,,,,,,S0,S0,Без столкновений
+192,SUBCLASS_C_DITCH,passive,1.037,True,0.85,1.49,1.49,S1,False,None,,,S0,both,26.63,4.24,9.2,0.19,0.4,0.1,Traversable Tracking Slope Departure,S1,S1,Боковой удар с целевым ТС + Traversable Tracking Slope Departure (both) (S1)
+193,SUBCLASS_C_DITCH,passive,0.997,False,,,,S0,False,None,,,S0,None,,,,,,,,S0,S0,Без столкновений
+194,SUBCLASS_C_DITCH,passive,0.889,True,0.97,1.7,1.7,S1,False,None,,,S0,both,26.38,4.97,10.9,0.1,0.2,1.1,Traversable Tracking Slope Departure,S1,S1,Боковой удар с целевым ТС + Traversable Tracking Slope Departure (both) (S1)
+195,SUBCLASS_C_DITCH,passive,0.756,False,,,,S0,False,None,,,S0,None,,,,,,,,S0,S0,Без столкновений
+196,SUBCLASS_C_DITCH,passive,0.974,False,,,,S0,False,None,,,S0,None,,,,,,,,S0,S0,Без столкновений
+197,SUBCLASS_C_DITCH,passive,0.813,False,,,,S0,False,None,,,S0,None,,,,,,,,S0,S0,Без столкновений
+198,SUBCLASS_C_DITCH,passive,0.746,False,,,,S0,False,None,,,S0,None,,,,,,,,S0,S0,Без столкновений
+199,SUBCLASS_C_DITCH,passive,1.05,False,,,,S0,False,None,,,S0,None,,,,,,,,S0,S0,Без столкновений
+200,SUBCLASS_C_DITCH,passive,0.816,True,1.12,1.96,1.96,S1,False,None,,,S0,both,25.6,3.69,8.3,0.27,0.6,0.6,Traversable Tracking Slope Departure,S1,S1,Боковой удар с целевым ТС + Traversable Tracking Slope Departure (both) (S1)
