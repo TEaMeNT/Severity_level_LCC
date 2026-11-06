@@ -1,44 +1,26 @@
 # ==============================================================================
 # HARA SIMULATION RUNNER: Lane Change Collision (LCC) Blind Spot Failure
-# Стандарты: ISO 26262-3 (HARA) / SAE J2980 (Appendix B - Severity, Appendix E - Shock)
-# Инженерный рефакторинг: двусторонний мониторинг столкновений, 6-режимная
-# террамеханика смены покрытий, разделение Controllability (C) и Severity (S).
+# Стандарты: ISO 26262-3:2018 (HARA) / SAE J2980 (Appendix B - Severity, Appendix E - Shock)
+# Архитектура: Исполнитель одиночных физических симуляций CARLA + Scenic
+# Методология: Двусторонний мониторинг (Ego + Target), Метод граничных условий на бровке кювета
 # ==============================================================================
 #
-# СИСТЕМА И АРХИТЕКТУРА ИССЛЕДОВАНИЯ:
-# Мы исследуем сценарий функционального отказа контроля слепых зон (Blind Spot Detection / LCC).
-# При отказе автомобиль Ego начинает перестроение на крейсерской скорости 100 км/ч (27.78 м/с)
-# в соседнюю полосу, в которой находится целевое ТС (Target) в пределах слепой зоны.
-#
-# СИСТЕМА КООРДИНАТ КАРТЫ MAP_DITCH:
-# - Продольная ось дороги: +X (направление на Восток, ограничение 90 км/ч, крейсерская 100 км/ч).
+# КАРТА И СИСТЕМА КООРДИНАТ MAP_DITCH:
+# - Продольная ось дороги: +X (направление на Восток, крейсерская скорость 100 км/ч = 27.78 м/с).
 # - Поперечная ось дороги: +Y (вправо по ходу движения ТС).
-# - Вертикальная ось: +Z (вверх).
-# - Полоса -1 (левая): центр Y = +1.875 м. Слева (Y <= 0.0 м) жесткий бетонный отбойник New Jersey (h = 0.80 м).
-# - Полоса -2 (правая): центр Y = +5.625 м. Справа (Y >= 7.50 м) обочина и водоотводный кювет.
-#   * Полоса -3, Y in [7.50, 9.75) м: укрепленная грунтово-гравийная обочина (Shoulder, Z = 0.0 м).
-#   * Полоса -4, Y in [9.75, 14.55) м: внутренний откос кювета с уклоном 1:4 (~14°, спуск до Z = -1.20 м).
-#   * Полоса -5, Y in [14.55, 16.05) м: дно водоотводного кювета (Ditch Bed, Z = -1.20 м).
-#   * Полоса -6, Y in [16.05, 20.85] м: обратный откос кювета с уклоном 1:4 (подъем до Z = 0.0 м).
+# - Вертикальная ось: +Z (вверх, уровень проезжей части и обочины Z = 0.0 м).
+# - Левая полоса (Lane -1): центр Y = +1.875 м. Слева (Y <= 0.0 м) жесткий бетонный отбойник New Jersey (h = 0.80 м).
+# - Правая полоса (Lane -2): центр Y = +5.625 м. Справа (Y >= 7.50 м) обочина и водоотводный кювет.
+#   * Обочина (Lane -3, Y in [7.50, 9.75) м): укрепленная грунтово-гравийная полоса (Z = 0.0 м).
+#   * Внутренний откос (Lane -4, Y in [9.75, 14.55) м): откос кювета с уклоном 1:4 (~14°, спуск до Z = -1.20 м).
+#   * Дно кювета (Lane -5, Y in [14.55, 16.05) м): плоское дно на отметке Z = -1.20 м.
+#   * Внешний откос (Lane -6, Y in [16.05, 20.85] м): обратный подъем 1:4 до Z = 0.0 м.
+#   * Придорожное поле (Lane -7, Y > 20.85 м): ровная поверхность (Z = 0.0 м).
 #
-# ИНЖЕНЕРНЫЕ БЛОКИ РЕФАКТОРИНГА:
-# 1. Привязка карты map_ditch и универсальное разрешение путей (CLI --map-dir).
-# 2. Когнитивная модель водителя (SAE J2980 Appendix E) и разделение метрик S и C (--driver-post-shock):
-#    - Фаза шока T_shock ~ N(0.85, 0.12) с [0.65, 1.05] с: спазм 0.25 с, далее кастор (*= 0.95), педали 0.0.
-#    - Пост-шок: 'passive' (Severity S, выбег), 'imperfect' (паника SAE J2980), 'active' (Controllability C).
-# 3. Двусторонний мониторинг столкновений (Ego + Target) по ISO 26262-3:
-#    - Датчики коллизий установлены на оба автомобиля.
-#    - Регистрация и векторный расчет удара о бетонный отбойник как для Ego, так и для вытолкнутого Target.
-# 4. Научно обоснованная 6-режимная модель трения шин по центру ТС (loc.y) для CARLA PhysX:
-#    - Режим 1: Сухой асфальт — штатное качение (tire_friction = 3.50, lat_stiff = 20.0).
-#    - Режим 2: Сухой асфальт — боковой юз после удара (tire_friction = 2.45, lat_stiff = 18.0).
-#    - Режим 3: Укрепленная гравийная обочина [7.50, 9.75) м (tire_friction = 1.90, drag soil_mu = 0.06).
-#    - Режим 4: Откос/дно кювета — прямое качение (tire_friction = 1.25, drag soil_mu = 0.22).
-#    - Режим 5: Откос/дно кювета — боковое зарывание и спотыкание (NHTSA Soil-Trip):
-#               опорные шины 3.20 / разгруженные 0.35, f_furrow = 0.35g, f_plow = 0.25g,
-#               опрокидывающий момент (* 3500.0) при |V_lat| > 3.2 м/с, вертикальный подскок 0.25g на дне.
-#    - Режим 6: Возврат на асфальт (Road Recovery) — восстановление штатного сцепления 3.50 при Y < 7.50 м.
-# 5. Итоговая каскадная агрегация тяжести ISO 26262-3 (max по всем факторам) и логирование в CSV.
+# ПРИНЦИП ЕДИНОЙ ОТВЕТСТВЕННОСТИ:
+# Скрипт runner.py отвечает ИСКЛЮЧИТЕЛЬНО за выполнение заездов в CARLA, съем
+# кинематических параметров каждого прогона и сохранение строки в CSV.
+# Логика статистической агрегации кампании (>10%) вынесена в analyze_results.py.
 # ==============================================================================
 
 import os
@@ -49,7 +31,6 @@ import random
 import csv
 import argparse
 import traceback
-from collections import deque
 
 # Настройка кодировки стандартного вывода на Windows для предотвращения кракозябр
 if sys.platform == 'win32':
@@ -84,12 +65,13 @@ os.makedirs(RESULTS_DIR, exist_ok=True)
 CSV_PATH = os.path.join(RESULTS_DIR, "lcc_hara_results.csv")
 CARLA_MAP_NAME = "map_ditch"
 
-# Список стандартных путей к ассетам карты map_ditch
-DEFAULT_MAP_DIRS = [
-    os.path.join(BASE_DIR, "maps", "assets"),
+DEFAULT_MAPS_DIR = os.path.join(BASE_DIR, "maps", "assets")
+FALLBACK_MAP_DIRS = [
+    DEFAULT_MAPS_DIR,
     os.path.join(BASE_DIR, "..", "maps", "assets"),
     r"C:\Users\teament\Desktop\xlam\Severity_level_LCC\maps\assets",
     r"C:\Users\teament\Desktop\xlam\work\maps\assets",
+    BASE_DIR,
 ]
 
 
@@ -101,8 +83,7 @@ def resolve_map_assets(custom_dir: str = None) -> tuple[str, str]:
     candidates = []
     if custom_dir:
         candidates.append(os.path.abspath(custom_dir))
-    candidates.extend(DEFAULT_MAP_DIRS)
-    candidates.append(BASE_DIR)
+    candidates.extend(FALLBACK_MAP_DIRS)
 
     for c_dir in candidates:
         if os.path.isdir(c_dir):
@@ -114,14 +95,16 @@ def resolve_map_assets(custom_dir: str = None) -> tuple[str, str]:
                 return c_dir, xodr_generic
 
     # Аварийный fallback на текущую рабочую директорию
-    fallback_xodr = os.path.join(BASE_DIR, "map.xodr")
+    fallback_xodr = os.path.join(BASE_DIR, "map_ditch.xodr")
+    if not os.path.isfile(fallback_xodr):
+        fallback_xodr = os.path.join(BASE_DIR, "map.xodr")
     return BASE_DIR, fallback_xodr
 
 
-# Физические параметры участников (Строго по ТЗ проекта):
+# Физические параметры участников сценария (Строго по ТЗ проекта):
 # Ego: Lincoln MKZ 2017 (масса 3490 кг как аналог тяжелого представительского седана Аурус Сенат)
 EGO_MASS = 3490.0        # Масса ТС Ego (кг)
-EGO_H_CG = 0.65          # Высота центра тяжести ТС Ego над опорной поверхностью (м)
+EGO_H_CG = 0.65          # Высота центра тяжести ТС Ego (м)
 
 # Target: Audi TT (легкое спорткупе массой 2000 кг)
 TARGET_MASS = 2000.0     # Масса целевого ТС (кг)
@@ -130,13 +113,42 @@ TARGET_H_CG = 0.52       # Высота центра тяжести целево
 # Коэффициент восстановления при пластической деформации кузовных панелей (SAE J2980)
 RESTITUTION_E = 0.15
 
-# Скоростной режим трассы (загородная дорога с ограничением 90 км/ч, крейсерская 100 км/ч)
+# Скоростной режим трассы (загородная дорога: ограничение 90 км/ч, крейсерская 100 км/ч)
 SPEED_LIMIT_MPS = 90.0 / 3.6    # 25.0 м/с
 CRUISE_SPEED_MPS = 100.0 / 3.6  # 27.78 м/с
 
-# Идентификаторы дорожных подклассов
-SUBCLASS_A = "SUBCLASS_A_BARRIER"  # Маневр влево: риск удара о бетонный отбойник (вес 0.20)
-SUBCLASS_C = "SUBCLASS_C_DITCH"    # Маневр вправо: риск схода и опрокидывания в кювете (вес 0.80)
+# Идентификаторы дорожных подклассов (с весами в ODD)
+SUBCLASS_A = "SUBCLASS_A_BARRIER"  # Маневр влево: риск удара о бетонный отбойник (W_A = 0.20)
+SUBCLASS_C = "SUBCLASS_C_DITCH"    # Маневр вправо: риск схода и опрокидывания в кювете (W_C = 0.80)
+
+# Точная схема 25 столбцов CSV-файла результатов HARA
+CSV_FIELDNAMES = [
+    'run_id',
+    'subclass',
+    'driver_post_shock_mode',
+    'shock_duration_sec',
+    'side_collision',
+    'delta_v_ego_mps',
+    'delta_v_target_mps',
+    'effective_side_dv_mps',
+    'sev_side',
+    'barrier_collision',
+    'barrier_collision_actor',
+    'barrier_impact_type',
+    'barrier_impact_mps',
+    'sev_barrier',
+    'ditch_departure_actor',
+    'departure_speed_mps',
+    'road_perp_speed_mps',
+    'encroachment_angle_deg',
+    'vehicle_lat_skid_mps',
+    'sideslip_angle_deg',
+    'departure_yaw_rate_deg_s',
+    'ditch_mechanism',
+    'sev_ditch',
+    'severity',
+    'scenario_outcome'
+]
 
 
 def normalize_deg(angle: float) -> float:
@@ -148,47 +160,25 @@ def normalize_deg(angle: float) -> float:
     return angle
 
 
-def safe_apply_physics_control(vehicle, phys):
-    """
-    КРИТИЧЕСКИ ВАЖНЫЙ ФИКС БАГА ФИЗИЧЕСКОГО ДВИЖКА CARLA PhysX:
-
-    В симуляторе CARLA вызов метода vehicle.apply_physics_control(phys) приводит
-    к пересозданию внутреннего объекта динамического твердого тела в PhysX.
-    По умолчанию в PhysX при этом линейная скорость (velocity) и угловая скорость
-    (angular_velocity) сбрасываются в вектор (0, 0, 0)!
-
-    Данная функция кэширует мгновенные векторы поступательного и вращательного движения
-    за доли миллисекунды до применения настроек физики и немедленно восстанавливает их
-    через set_target_velocity() и set_target_angular_velocity(), строго сохраняя
-    физический импульс и кинематику движения ТС в пространстве.
-    """
-    if vehicle is None:
-        return
-    vel = vehicle.get_velocity()
-    ang_vel = vehicle.get_angular_velocity()
-    vehicle.apply_physics_control(phys)
-    vehicle.set_target_velocity(vel)
-    vehicle.set_target_angular_velocity(ang_vel)
-
-
 # ==============================================================================
 # AUTOPILOT & SIMULATION MANAGER
 # ==============================================================================
 class AutopilotManager:
     """
-    Менеджер симуляции HARA LCC Blind Spot:
-    - Конфигурация Ego и Target, поддержание строя в слепой зоне.
-    - Инициализация и обработка двух датчиков столкновений (Ego + Target).
-    - Когнитивная модель водителя SAE J2980 с тремя режимами пост-шока ('passive', 'imperfect', 'active').
-    - 6-режимная модель террамеханики смены дорожных покрытий по центру ТС.
-    - Расчет метрик тяжести по стандартам ISO 26262-3 и SAE J2980.
+    Менеджер симуляции HARA LCC Blind Spot Failure:
+    - Фаза 0: Инициализация актеров, назначение масс PhysX, прикрепление датчиков коллизий к Ego и Target.
+    - Фаза 1: Синхронный разгон до 100 км/ч и ПИД-удержание целевого ТС в слепой зоне.
+    - Фаза 2: Инициация маневра перестроения, когнитивная модель водителя SAE J2980.
+    - Двусторонний мониторинг ударов об отбойник (Ego + Target) по ISO 26262-3.
+    - Метод граничных условий на бровке кювета (Y = 9.75 м) без искусственной террамеханики.
     """
 
-    def __init__(self, client, world, subclass: str = SUBCLASS_C, driver_post_shock: str = 'passive'):
+    def __init__(self, client, world, subclass: str = SUBCLASS_C, driver_post_shock: str = 'passive', dt: float = 0.01):
         self.client = client
         self.world = world
         self.subclass = subclass
         self.driver_post_shock = driver_post_shock
+        self.dt = float(dt)
 
         if self.client is not None:
             self.tm = self.client.get_trafficmanager(8000)
@@ -214,6 +204,7 @@ class AutopilotManager:
         self.initial_lon_offset = 0.0
         self.target_err_integral = 0.0
         self.stability_counter = 0
+        self.stability_time_sec = 0.0
 
         self.pid_controller = None
         self.start_lane_id = None
@@ -223,22 +214,18 @@ class AutopilotManager:
         self.target_collision_sensor = None
         self.speed_history = {}
 
-        # Кэши состояний террамеханики и истории скоростей
-        self.vehicle_terramech_state = {}  # actor_id -> state str
-        self.ditch_v_history = {}          # actor_id -> deque of carla.Vector3D (maxlen=20)
-
         # ----------------------------------------------------------------------
-        # БЛОК 2: Когнитивная модель водителя (SAE J2980 Appendix E)
+        # Когнитивная модель водителя (SAE J2980 Appendix E)
         # ----------------------------------------------------------------------
         # Время акустико-вестибулярного ступора: 0.65 - 1.05 с, медиана 0.85 с
         self.shock_duration_sec = min(1.05, max(0.65, random.gauss(0.85, 0.12)))
-        self.shock_duration_ticks = int(self.shock_duration_sec / 0.01)
+        self.shock_duration_ticks = max(1, int(round(self.shock_duration_sec / self.dt)))
         self.last_steer = 0.0
         self.impact_steer = 0.0
         self.current_steer = 0.0
 
         # ----------------------------------------------------------------------
-        # БЛОК 3: Первичное столкновение ТС с ТС
+        # Первичное столкновение ТС с ТС (SAE J2980 Table B1)
         # ----------------------------------------------------------------------
         self.side_collision_frame = None
         self.v_closing_lat = 0.0
@@ -248,23 +235,18 @@ class AutopilotManager:
         self.sev_side_val = 0
 
         # ----------------------------------------------------------------------
-        # БЛОК 4.1: Вторичное столкновение с отбойником (Подкласс А)
+        # Вторичный удар об отбойник (Подкласс А)
         # ----------------------------------------------------------------------
         self.barrier_collision_frame = None
         self.barrier_impact_speed = 0.0
         self.barrier_impact_type = ""
         self.sev_barrier_val = 0
-        self.barrier_departed_actors = set()  # {'ego', 'target'}
+        self.barrier_hit_actors = set()  # {'ego', 'target'}
 
         # ----------------------------------------------------------------------
-        # БЛОК 4.2: Вторичное опрокидывание / закапывание в кювете (Подкласс С)
+        # Граничные условия вылета в кювет на бровке Y = 9.75 м (Подкласс С)
         # ----------------------------------------------------------------------
-        self.departed_actors = set()     # {'ego', 'target'}
-        self.departure_speeds = {}       # actor_id -> float (mps)
-        self.max_tilt_deg = {}           # actor_id -> float (deg)
-        self.max_lateral_slip = {}       # actor_id -> float (mps)
-        self.wheel_furrowing_triggered = False
-        self.max_ditch_3d_dv = {}        # actor_id -> float (mps)
+        self.ditch_metrics_by_actor = {}  # actor_name ('ego'/'target') -> dict of metrics
         self.sev_ditch_val = 0
 
     # --------------------------------------------------------------------------
@@ -274,17 +256,16 @@ class AutopilotManager:
         """
         Универсальный обработчик столкновений для Ego и Target по ISO 26262-3:
         - Обнаруживает первичное боковое столкновение ТС-ТС.
-        - Обнаруживает удар о бетонный отбойник для ЛЮБОГО из ТС (Ego или Target).
+        - Обнаруживает вторичный удар о бетонный отбойник для Ego или Target.
         """
         other = event.other_actor
         frame = event.frame
 
+        # Извлечение кинематики строго за 1 кадр до контакта (PhysX clean vectors)
         hist = self.speed_history.get(frame - 1)
+        # Если frame - 1 почему-то недоступен, берем наиболее свежий доступный кадр до frame
         if not hist:
-            hist = self.speed_history.get(frame)
-        if not hist and self.speed_history:
-            closest_frame = max(self.speed_history.keys())
-            hist = self.speed_history[closest_frame]
+            hist = self.speed_history.get(frame - 2)
         if not hist:
             return
 
@@ -297,13 +278,13 @@ class AutopilotManager:
         lane_right = hist['lane_right']
 
         # ----------------------------------------------------------------------
-        # 1. Первичный удар ТС с ТС (поперечный импульс по SAE J2980)
+        # 1. Первичный боковой удар ТС с ТС (SAE J2980 Table B1)
         # ----------------------------------------------------------------------
         if 'vehicle' in other.type_id.lower():
             if self.side_collision_frame is None:
                 self.side_collision_frame = frame
 
-                # Поперечная скорость сближения за 1 кадр до контакта
+                # Поперечная скорость сближения строго за 1 кадр до контакта (frame - 1)
                 v_rel_x = ego_v.x - target_v.x
                 v_rel_y = ego_v.y - target_v.y
                 self.v_closing_lat = abs((v_rel_x * ego_right.x) + (v_rel_y * ego_right.y))
@@ -317,7 +298,7 @@ class AutopilotManager:
                 self.delta_v_target = (m_ego / (m_ego + m_target)) * (1.0 + e) * self.v_closing_lat
                 self.effective_side_delta_v = max(self.delta_v_ego, self.delta_v_target)
 
-                # Калиброванная шкала SAE J2980 Table B1
+                # Калиброванная шкала SAE J2980 Table B1 (боковой удар)
                 if self.effective_side_delta_v > 8.0:
                     self.sev_side_val = 3
                 elif self.effective_side_delta_v > 3.5:
@@ -361,7 +342,6 @@ class AutopilotManager:
         # 2. Вторичный удар об отбойник (Подкласс А) для Ego или Target
         # ----------------------------------------------------------------------
         else:
-            # Проверяем, что удар совершен именно об отбойник (зона бетонного ограждения Y <= 1.0 м)
             actor_veh = self.ego_vehicle if source_actor == 'ego' else self.target_vehicle
             if actor_veh is None:
                 return
@@ -369,12 +349,13 @@ class AutopilotManager:
                 loc_y = actor_veh.get_location().y
             except Exception:
                 return
-            if loc_y > 1.0:
-                # В зоне обочины/кювета (Y >= 7.5 м) контакт с грунтом или дорожной поверхностью
-                # не является ударом о бетонный отбойник New Jersey
+
+            # Отбойник расположен на Y = 0.0 м. Учитывая диагональное положение кузова, центр ТС при ударе может быть до Y = 3.2 м.
+            # Отсекаем ложные срабатывания о правый кювет (Y >= 7.5 м).
+            if loc_y > 3.2:
                 return
 
-            # Извлекаем кинематику именно того ТС, которое совершило столкновение
+            # Кинематика участника за 1 кадр до удара (frame - 1)
             if source_actor == 'ego':
                 v_actor = ego_v
                 fw_actor = ego_forward
@@ -382,14 +363,14 @@ class AutopilotManager:
                 v_actor = target_v
                 fw_actor = target_forward
 
-            # Нормальная скорость впечатывания в плоскость отбойника
+            # Нормальная скорость впечатывания перпендикулярно плоскости отбойника
             v_barrier = abs((v_actor.x * lane_right.x) + (v_actor.y * lane_right.y))
 
-            # Косинус угла атаки относительно продольной оси полосы
+            # Косинус угла атаки относительно продольной оси дороги
             cos_alpha = (fw_actor.x * lane_forward.x) + (fw_actor.y * lane_forward.y)
 
             if abs(cos_alpha) < 0.707:
-                # Угол атаки > 45 град (работают лонжероны и зоны деформации)
+                # Угол атаки > 45 град (Frontal/Rear: работают зоны деформации кузова)
                 cur_impact_type = 'Frontal/Rear'
                 if v_barrier > 18.0:
                     cur_sev = 3
@@ -400,7 +381,7 @@ class AutopilotManager:
                 else:
                     cur_sev = 0
             else:
-                # Угол атаки <= 45 град (боковой скользящий удар без зон смятия)
+                # Угол атаки <= 45 град (Side-swipe: боковой скользящий удар без зон смятия)
                 cur_impact_type = 'Side-swipe'
                 if v_barrier > 12.0:
                     cur_sev = 3
@@ -411,9 +392,9 @@ class AutopilotManager:
                 else:
                     cur_sev = 0
 
-            self.barrier_departed_actors.add(source_actor)
+            self.barrier_hit_actors.add(source_actor)
 
-            # Сохраняем первичный или более тяжелый удар в отбойник
+            # Сохранение первичного или наихудшего удара
             is_first = (self.barrier_collision_frame is None)
             is_worse = (cur_sev > self.sev_barrier_val) or (
                 cur_sev == self.sev_barrier_val and v_barrier > self.barrier_impact_speed
@@ -428,9 +409,9 @@ class AutopilotManager:
             print(f"\n[{frame}] ->> УДАР ОБ ОТБОЙНИК ({source_actor.upper()}): "
                   f"Тип: {cur_impact_type} | "
                   f"Скорость удара = {v_barrier:.2f} м/с | "
-                  f"S_barrier = S{cur_sev} (макс. S_barrier: S{self.sev_barrier_val})")
+                  f"S_barrier = S{cur_sev} (макс. по прогону: S{self.sev_barrier_val})")
 
-            # Активация шока для Ego при прямом ударе Ego об отбойник
+            # Активация фазы шока для Ego при первичном ударе Ego об отбойник
             if not self.lost_control and source_actor == 'ego':
                 self.lost_control = True
                 self.collision_tick = self.tick_count
@@ -438,230 +419,97 @@ class AutopilotManager:
                 self.current_steer = self.impact_steer
 
     # --------------------------------------------------------------------------
-    # 6-РЕЖИМНАЯ МОДЕЛЬ СМЕНЫ ДОРОЖНЫХ ПОКРЫТИЙ И ТЕРРАМЕХАНИКИ
+    # Метод граничных условий на бровке кювета Y = 9.75 м (Подкласс С)
     # --------------------------------------------------------------------------
-    def update_vehicle_surface_physics(self, vehicle, mass: float, h_cg: float, actor_name: str):
+    def check_ditch_boundary_conditions(self, actor_name: str, vehicle, lane_forward, lane_right, snapshot_frame: int):
         """
-        Единая 6-режимная модель физики сцепления шин и террамеханики по центру ТС (loc.y):
-        - Режим 1: Сухой асфальт — штатное качение (Y < 7.50, |V_lat| <= 2.2 м/с).
-        - Режим 2: Сухой асфальт — срыв в боковой юз (Y < 7.50, lost_control, |V_lat| > 2.2 м/с).
-        - Режим 3: Укрепленная гравийная обочина [7.50, 9.75) м — сопротивление гравия (soil_mu=0.06).
-        - Режим 4: Откос/дно кювета [9.75, 21.0] м — прямолинейное качение по грунту (soil_mu=0.22).
-        - Режим 5: Откос/дно кювета [9.75, 21.0] м — боковое зарывание и спотыкание (NHTSA Soil-Trip).
-        - Режим 6: Возврат на асфальт (Road Recovery) — возврат сцепления 3.50 при Y < 7.50 м.
+        Проверка пересечения бровки откоса кювета (Y >= 9.75 м) и фиксация граничных условий:
+        - V_dep: полная горизонтальная скорость вылета (м/с).
+        - V_perp_road: нормальная скорость ухода в кювет (м/с).
+        - theta_enc: угол траектории вылета (градусы).
+        - V_lat_car: поперечная скорость бокового скольжения колес (м/с).
+        - beta: угол бокового заноса кузова (Sideslip Angle, градусы).
+        - omega_z: угловая скорость рыскания кузова (Yaw Rate, град/с).
+        - Классификация тяжести S0-S3 по научно обоснованной матрице (Cooperrider / NHTSA / AASHTO).
         """
-        loc = vehicle.get_location()
-
-        # Замер метрик и физика действуют строго в пределах рельефа карты
-        if loc.y > 21.0 or loc.z < -2.0:
-            # ТС за пределами рельефа карты — фиксируем скорость и динамику PhysX,
-            # предотвращая падение в бесконечную пустоту (UE4 KillZ crash)
-            try:
-                vehicle.set_target_velocity(carla.Vector3D(0.0, 0.0, 0.0))
-                vehicle.set_target_angular_velocity(carla.Vector3D(0.0, 0.0, 0.0))
-                vehicle.set_simulate_physics(False)
-            except Exception:
-                pass
+        if vehicle is None or actor_name in self.ditch_metrics_by_actor:
             return
 
-        tf = vehicle.get_transform()
-        rot = tf.rotation
-        v_vec = vehicle.get_velocity()
-        fw_vec = tf.get_forward_vector()
-        right_vec = tf.get_right_vector()
+        loc = vehicle.get_location()
 
-        # Кинематические проекции в локальных осях ТС
-        v_lon = (v_vec.x * fw_vec.x) + (v_vec.y * fw_vec.y)
-        v_lat = (v_vec.x * right_vec.x) + (v_vec.y * right_vec.y)
-        v_total = math.hypot(v_vec.x, v_vec.y)
-        sin_beta = abs(v_lat) / max(v_total, 0.5)
+        # Фиксация происходит ровно в кадр пересечения бровки откоса кювета (Y >= 9.75 м)
+        if loc.y >= 9.75:
+            tf = vehicle.get_transform()
+            vel = vehicle.get_velocity()
+            ang_vel = vehicle.get_angular_velocity()  # В CARLA z возвращается в градусах/сек
 
-        # ----------------------------------------------------------------------
-        # ЗОНА А: Проезжая часть (Сухой асфальт, Y < 7.50 м)
-        # ----------------------------------------------------------------------
-        if loc.y < 7.50:
-            if self.lost_control and abs(v_lat) > 2.2:
-                # Режим 2: Срыв в боковой юз на сухом асфальте
-                target_state = 'asphalt_slide'
-                if self.vehicle_terramech_state.get(vehicle.id) != target_state:
-                    phys = vehicle.get_physics_control()
-                    for w in phys.wheels:
-                        w.tire_friction = 2.45
-                        w.lat_stiff_value = 18.0
-                        w.lat_stiff_max_load = 1.5
-                    safe_apply_physics_control(vehicle, phys)
-                    self.vehicle_terramech_state[vehicle.id] = target_state
+            # 1. Полная горизонтальная скорость вылета (м/с)
+            v_dep = math.hypot(vel.x, vel.y)
+
+            # 2. Нормальная скорость ухода в кювет перпендикулярно оси дороги
+            v_perp_road = abs(vel.x * lane_right.x + vel.y * lane_right.y)
+
+            # 3. Угол траектории вылета относительно дороги (Encroachment Angle, град)
+            sin_theta = min(1.0, v_perp_road / max(v_dep, 0.1))
+            theta_enc = math.degrees(math.asin(sin_theta))
+
+            # 4. Кинематические проекции в локальных осях кузова автомобиля
+            fw_vec = tf.get_forward_vector()
+            rt_vec = tf.get_right_vector()
+            v_lon_car = abs(vel.x * fw_vec.x + vel.y * fw_vec.y)
+            v_lat_car = abs(vel.x * rt_vec.x + vel.y * rt_vec.y)
+
+            # 5. Угол бокового заноса кузова (Sideslip Angle beta, град)
+            beta = math.degrees(math.atan2(v_lat_car, max(v_lon_car, 0.01)))
+
+            # 6. Угловая скорость рыскания (Yaw Rate omega_z, град/с)
+            omega_z = abs(ang_vel.z)
+
+            # 7. Классификация механизма и тяжести по матрице граничных условий:
+            # S3: Критические / фатальные травмы (MAIS 5-6 > 10%)
+            # Cooperrider SAE 900366 / Digges NHTSA / SAE J2980 Table B1
+            is_s3_skid = (v_dep > 18.0) and (v_lat_car > 5.5 or beta >= 25.0 or omega_z > 45.0)
+            is_s3_nose = (v_perp_road > 12.0)
+
+            # S2: Тяжелые травмы (MAIS 3-6 > 10%) - NCHRP Report 665 / Mak & Sicking
+            is_s2_skid = (v_dep > 11.0) and (v_lat_car > 3.5 or beta >= 15.0 or omega_z > 25.0)
+            is_s2_bottom = (v_perp_road > 6.0)
+
+            # S1: Легкие травмы - AASHTO Roadside Design Guide / СП 34.13330.2021
+            is_s1_tracking = (v_dep > 8.0 and v_perp_road > 2.0)
+            is_s1_low_skid = (v_dep <= 11.0 and beta >= 15.0)
+
+            if is_s3_skid or is_s3_nose:
+                actor_sev = 3
+                mechanism = 'High-Speed Soil-Trip Rollover' if is_s3_skid else 'Severe Ditch Nose-In Impact'
+            elif is_s2_skid or is_s2_bottom:
+                actor_sev = 2
+                mechanism = 'Moderate Rollover Risk' if is_s2_skid else 'Hard Ditch Bottom Impact'
+            elif is_s1_tracking or is_s1_low_skid:
+                actor_sev = 1
+                mechanism = 'Traversable Tracking Slope Departure'
             else:
-                # Режим 1 и Режим 6: Штатное качение или возврат на сухой асфальт
-                target_state = 'asphalt_grip'
-                if self.vehicle_terramech_state.get(vehicle.id) != target_state:
-                    phys = vehicle.get_physics_control()
-                    for w in phys.wheels:
-                        w.tire_friction = 3.50
-                        w.lat_stiff_value = 20.0
-                        w.lat_stiff_max_load = 2.0
-                    safe_apply_physics_control(vehicle, phys)
-                    self.vehicle_terramech_state[vehicle.id] = target_state
-            # На асфальте внешние силы грунта отсутствуют (F_ext = 0)
+                actor_sev = 0
+                mechanism = 'Shallow Grazing Departure'
 
-        # ----------------------------------------------------------------------
-        # ЗОНА Б: Укрепленная грунтово-гравийная обочина (7.50 <= Y < 9.75 м, Z = 0.0 м)
-        # ----------------------------------------------------------------------
-        elif loc.y < 9.75:
-            # Режим 3: Плотный щебень/гравий
-            target_state = 'shoulder'
-            if self.vehicle_terramech_state.get(vehicle.id) != target_state:
-                phys = vehicle.get_physics_control()
-                for w in phys.wheels:
-                    w.tire_friction = 1.90
-                    w.lat_stiff_value = 14.0
-                    w.lat_stiff_max_load = 1.8
-                safe_apply_physics_control(vehicle, phys)
-                self.vehicle_terramech_state[vehicle.id] = target_state
+            self.ditch_metrics_by_actor[actor_name] = {
+                'v_dep': v_dep,
+                'v_perp_road': v_perp_road,
+                'theta_enc': theta_enc,
+                'v_lat_car': v_lat_car,
+                'beta': beta,
+                'omega_z': omega_z,
+                'mechanism': mechanism,
+                'actor_sev': actor_sev,
+                'frame': snapshot_frame,
+                'y_loc': loc.y
+            }
 
-            # Сопротивление качению щебня (soil_mu = 0.06)
-            drag_scale = -0.06 * mass * 9.81 / max(v_total, 0.1)
-            f_drag = carla.Vector3D(x=v_vec.x * drag_scale, y=v_vec.y * drag_scale, z=0.0)
-            vehicle.add_force(f_drag)
-            # Закапывание, фиксация кювета и опрокидывающий момент на обочине ЗАПРЕЩЕНЫ
-
-        # ----------------------------------------------------------------------
-        # ЗОНА В: Откос и дно кювета (9.75 <= Y <= 21.0 м)
-        # ----------------------------------------------------------------------
-        else:
-            # 1. Фиксация схода в кювет строго при Y >= 9.75 м
-            if vehicle.id not in self.departure_speeds:
-                v_dep = math.hypot(v_vec.x, v_vec.y, v_vec.z)
-                self.departure_speeds[vehicle.id] = v_dep
-                self.departed_actors.add(actor_name)
-                snap_frame = self.world.get_snapshot().frame if self.world else 0
-                print(f"\n[{snap_frame}] ->> СХОД В КЮВЕТ ({actor_name.upper()}): "
-                      f"Скорость схода = {v_dep*3.6:.1f} км/ч ({v_dep:.2f} м/с), Y = {loc.y:.2f} м")
-
-            # 2. Обновление динамических метрик кювета
-            tilt = max(abs(normalize_deg(rot.roll)), abs(normalize_deg(rot.pitch)))
-            self.max_tilt_deg[vehicle.id] = max(self.max_tilt_deg.get(vehicle.id, 0.0), tilt)
-            self.max_lateral_slip[vehicle.id] = max(self.max_lateral_slip.get(vehicle.id, 0.0), abs(v_lat))
-
-            # Скользящее окно 3D-изменения скорости за 20 тиков (0.20 с)
-            if vehicle.id not in self.ditch_v_history:
-                self.ditch_v_history[vehicle.id] = deque(maxlen=20)
-            dq = self.ditch_v_history[vehicle.id]
-            dq.append(v_vec)
-            if len(dq) == 20:
-                v_old = dq[0]
-                dv_3d = math.sqrt(
-                    (v_vec.x - v_old.x)**2 +
-                    (v_vec.y - v_old.y)**2 +
-                    (v_vec.z - v_old.z)**2
-                )
-                self.max_ditch_3d_dv[vehicle.id] = max(self.max_ditch_3d_dv.get(vehicle.id, 0.0), dv_3d)
-
-            # 3. Режим 4: Прямолинейное качение по траве/грунту откоса (|V_lat| <= 2.0 м/с)
-            if abs(v_lat) <= 2.0:
-                target_state = 'ditch_rolling'
-                if self.vehicle_terramech_state.get(vehicle.id) != target_state:
-                    phys = vehicle.get_physics_control()
-                    for w in phys.wheels:
-                        w.tire_friction = 1.25
-                        w.lat_stiff_value = 10.0
-                        w.lat_stiff_max_load = 1.6
-                    safe_apply_physics_control(vehicle, phys)
-                    self.vehicle_terramech_state[vehicle.id] = target_state
-
-                # Вязкое сопротивление грунта качению (soil_mu = 0.22)
-                drag_scale = -0.22 * mass * 9.81 / max(v_total, 0.1)
-                f_drag = carla.Vector3D(x=v_vec.x * drag_scale, y=v_vec.y * drag_scale, z=0.0)
-                vehicle.add_force(f_drag)
-
-            # 4. Режим 5: Боковое зарывание и спотыкание (Soil Furrowing & Tripping, |V_lat| > 2.0 м/с)
-            else:
-                self.wheel_furrowing_triggered = True
-
-                if v_lat > 2.0:
-                    # Занос правым бортом вперед: правые колеса (1, 3) зарываются, левые (0, 2) разгружаются
-                    target_state = 'furrow_right'
-                    if self.vehicle_terramech_state.get(vehicle.id) != target_state:
-                        phys = vehicle.get_physics_control()
-                        phys.wheels[1].tire_friction = 3.20
-                        phys.wheels[1].lat_stiff_value = 40.0
-                        phys.wheels[1].lat_stiff_max_load = 2.0
-                        phys.wheels[3].tire_friction = 3.20
-                        phys.wheels[3].lat_stiff_value = 40.0
-                        phys.wheels[3].lat_stiff_max_load = 2.0
-                        phys.wheels[0].tire_friction = 0.35
-                        phys.wheels[0].lat_stiff_value = 10.0
-                        phys.wheels[0].lat_stiff_max_load = 1.5
-                        phys.wheels[2].tire_friction = 0.35
-                        phys.wheels[2].lat_stiff_value = 10.0
-                        phys.wheels[2].lat_stiff_max_load = 1.5
-                        safe_apply_physics_control(vehicle, phys)
-                        self.vehicle_terramech_state[vehicle.id] = target_state
-                else:
-                    # Занос левым бортом вперед: левые колеса (0, 2) зарываются, правые (1, 3) разгружаются
-                    target_state = 'furrow_left'
-                    if self.vehicle_terramech_state.get(vehicle.id) != target_state:
-                        phys = vehicle.get_physics_control()
-                        phys.wheels[0].tire_friction = 3.20
-                        phys.wheels[0].lat_stiff_value = 40.0
-                        phys.wheels[0].lat_stiff_max_load = 2.0
-                        phys.wheels[2].tire_friction = 3.20
-                        phys.wheels[2].lat_stiff_value = 40.0
-                        phys.wheels[2].lat_stiff_max_load = 2.0
-                        phys.wheels[1].tire_friction = 0.35
-                        phys.wheels[1].lat_stiff_value = 10.0
-                        phys.wheels[1].lat_stiff_max_load = 1.5
-                        phys.wheels[3].tire_friction = 0.35
-                        phys.wheels[3].lat_stiff_value = 10.0
-                        phys.wheels[3].lat_stiff_max_load = 1.5
-                        safe_apply_physics_control(vehicle, phys)
-                        self.vehicle_terramech_state[vehicle.id] = target_state
-
-                # Коэффициент глубины пропахивания борозды
-                k_zone = 1.4 if (loc.z <= -0.70 or loc.y >= 13.0) else 1.0
-                k_furrow = min(1.0, (abs(v_lat) - 2.0) / 4.0) * k_zone
-
-                # Добавочная боковая сила среза грунтового валика (снижена до 0.35g во избежание двойного учета)
-                f_furrow_mag = k_furrow * 0.35 * mass * 9.81 * sin_beta
-                sign_lat = 1.0 if v_lat > 0 else -1.0
-                f_furrow_vec = carla.Vector3D(
-                    x=-sign_lat * right_vec.x * f_furrow_mag,
-                    y=-sign_lat * right_vec.y * f_furrow_mag,
-                    z=0.0
-                )
-                vehicle.add_force(f_furrow_vec)
-
-                # Продольная сила торможения пахотой (снижена до 0.25g)
-                f_plow_mag = k_furrow * 0.25 * mass * 9.81
-                f_plow_vec = carla.Vector3D(
-                    x=-v_vec.x / max(v_total, 0.1) * f_plow_mag,
-                    y=-v_vec.y / max(v_total, 0.1) * f_plow_mag,
-                    z=0.0
-                )
-                vehicle.add_force(f_plow_vec)
-
-                # Сопротивление подъему на обратный откос кювета (Y >= 15.5 м)
-                if loc.y >= 15.5:
-                    y_scale = 1.20 if loc.y >= 20.0 else 0.35
-                    f_brake_x = -v_vec.x * mass * 0.5 if loc.y >= 20.0 else 0.0
-                    vehicle.add_force(carla.Vector3D(x=f_brake_x, y=-y_scale * mass * 9.81, z=0.0))
-
-                # Реалистичный опрокидывающий момент спотыкания (Soil Tripping Torque)
-                if abs(v_lat) > 3.2:
-                    norm_roll = normalize_deg(rot.roll)
-                    if abs(norm_roll) < 85.0:
-                        lever = h_cg + 0.15
-                        torque_mag = f_furrow_mag * lever * 3500.0
-                        torque_vec = carla.Vector3D(
-                            x=-sign_lat * fw_vec.x * torque_mag,
-                            y=-sign_lat * fw_vec.y * torque_mag,
-                            z=0.0
-                        )
-                        vehicle.add_torque(torque_vec)
-
-                    # Вертикальный подброс кузова при ударе колес о перелом дна кювета
-                    if loc.z <= -0.5 or loc.y >= 12.5:
-                        vehicle.add_force(carla.Vector3D(x=0.0, y=0.0, z=0.25 * mass * 9.81))
+            print(f"\n[{snapshot_frame}] ->> СХОД В КЮВЕТ ({actor_name.upper()} на бровке Y=9.75м): "
+                  f"V_dep={v_dep*3.6:.1f} км/ч ({v_dep:.2f} м/с) | "
+                  f"V_perp={v_perp_road:.2f} м/с (угол {theta_enc:.1f}°) | "
+                  f"V_lat={v_lat_car:.2f} м/с (занос beta={beta:.1f}°, omega_z={omega_z:.1f}°/с) | "
+                  f"Механизм: '{mechanism}' -> S{actor_sev}")
 
     # --------------------------------------------------------------------------
     # Основной цикл симуляции (on_tick)
@@ -671,7 +519,7 @@ class AutopilotManager:
             return
         try:
             # ------------------------------------------------------------------
-            # Инициализация и конфигурация актеров при старте
+            # ФАЗА 0: Инициализация и конфигурация актеров при старте
             # ------------------------------------------------------------------
             if not self.configured:
                 vehicles = self.world.get_actors().filter('vehicle.*')
@@ -699,7 +547,7 @@ class AutopilotManager:
                     disp_lat = target_loc - target_wp.transform.location
                     lateral_offset = (disp_lat.x * right_vec.x) + (disp_lat.y * right_vec.y)
 
-                    # Настройка Traffic Manager для обоих ТС
+                    # Настройка синхронного Traffic Manager для обоих ТС
                     self.ego_vehicle.set_autopilot(True, self.tm.get_port())
                     self.tm.auto_lane_change(self.ego_vehicle, False)
                     self.tm.ignore_vehicles_percentage(self.ego_vehicle, 100)
@@ -710,19 +558,19 @@ class AutopilotManager:
                     self.tm.ignore_vehicles_percentage(self.target_vehicle, 100)
                     self.tm.vehicle_lane_offset(self.target_vehicle, float(lateral_offset))
 
-                    # Применение кастомных масс в PhysX
+                    # Назначение физических масс в движке PhysX (чистая нативная физика подвески)
                     phys_ego = self.ego_vehicle.get_physics_control()
                     phys_ego.mass = EGO_MASS
-                    safe_apply_physics_control(self.ego_vehicle, phys_ego)
+                    self.ego_vehicle.apply_physics_control(phys_ego)
 
                     phys_target = self.target_vehicle.get_physics_control()
                     phys_target.mass = TARGET_MASS
-                    safe_apply_physics_control(self.target_vehicle, phys_target)
+                    self.target_vehicle.apply_physics_control(phys_target)
 
-                    # Инициализация ПИД-контроллера для Ego
+                    # Инициализация ПИД-контроллера траектории для Ego
                     if VehiclePIDController is not None:
-                        args_lateral = {'K_P': 1.5, 'K_I': 0.05, 'K_D': 0.1, 'dt': 0.01}
-                        args_long = {'K_P': 1.0, 'K_I': 0.05, 'K_D': 0.0, 'dt': 0.01}
+                        args_lateral = {'K_P': 1.1, 'K_I': 0.03, 'K_D': 0.15, 'dt': self.dt}
+                        args_long = {'K_P': 1.0, 'K_I': 0.05, 'K_D': 0.0, 'dt': self.dt}
                         self.pid_controller = VehiclePIDController(
                             self.ego_vehicle,
                             args_lateral=args_lateral,
@@ -751,6 +599,7 @@ class AutopilotManager:
                         self.spectator = self.world.get_spectator()
                     except Exception:
                         self.spectator = None
+
                     print(f"[{snapshot.frame}] Актеры сконфигурированы: "
                           f"Ego ({self.ego_vehicle.type_id}, {EGO_MASS} кг, Lane {self.start_lane_id}) | "
                           f"Target ({self.target_vehicle.type_id}, {TARGET_MASS} кг) | "
@@ -758,7 +607,7 @@ class AutopilotManager:
                           f"Пост-шок режим: {self.driver_post_shock}")
 
             # ------------------------------------------------------------------
-            # Основной цикл после конфигурации
+            # ФАЗЫ 1 И 2 ПОСЛЕ КОНФИГУРАЦИИ
             # ------------------------------------------------------------------
             else:
                 ego_snap = snapshot.find(self.ego_vehicle.id)
@@ -784,7 +633,7 @@ class AutopilotManager:
                 lane_forward = current_ego_wp.transform.get_forward_vector()
                 lane_right = current_ego_wp.transform.get_right_vector()
 
-                # Сохраняем кинематическую историю за 1 кадр до удара для обоих ТС
+                # Кэширование пред-аварийной кинематики за 1 кадр до контакта для обоих ТС
                 self.speed_history[snapshot.frame] = {
                     'ego_v': ego_v,
                     'ego_forward': ego_fw,
@@ -796,13 +645,13 @@ class AutopilotManager:
                     'lane_right': lane_right
                 }
 
-                # Ограничиваем размер истории для экономии памяти
+                # Очистка старых кадров из словаря
                 if len(self.speed_history) > 200:
                     old_keys = sorted(self.speed_history.keys())[:-100]
                     for k in old_keys:
                         del self.speed_history[k]
 
-                # Камера зрителя следует за Ego (без блокирующих RPC)
+                # Камера зрителя следует за Ego
                 if self.spectator is not None:
                     try:
                         cam_loc = ego_loc - (ego_fw * 12.0) + carla.Location(z=4.5)
@@ -815,16 +664,23 @@ class AutopilotManager:
                 self.tick_count += 1
 
                 # --------------------------------------------------------------
-                # БЛОК 4: 6-режимная террамеханика для ОБОИХ ТС (Ego и Target)
+                # МОНИТОРИНГ БРОВКИ КЮВЕТА Y = 9.75 М ДЛЯ ОБОИХ ТС (Подкласс С)
                 # --------------------------------------------------------------
-                for veh, mass, h_cg, actor_name in [
-                    (self.ego_vehicle, EGO_MASS, EGO_H_CG, 'ego'),
-                    (self.target_vehicle, TARGET_MASS, TARGET_H_CG, 'target')
-                ]:
-                    if veh is not None:
-                        self.update_vehicle_surface_physics(veh, mass, h_cg, actor_name)
+                self.check_ditch_boundary_conditions('ego', self.ego_vehicle, lane_forward, lane_right, snapshot.frame)
+                self.check_ditch_boundary_conditions('target', self.target_vehicle, lane_forward, lane_right, snapshot.frame)
 
-                # Управление Target при вытеснении на обочину/в кювет (Y >= 7.50 м)
+                # Безопасное гашение скорости за пределами рельефа карты (Y > 21.0 м или Z < -2.0 м)
+                for veh in [self.ego_vehicle, self.target_vehicle]:
+                    if veh is not None:
+                        try:
+                            vloc = veh.get_location()
+                            if vloc.y > 21.0 or vloc.z < -2.0:
+                                veh.set_target_velocity(carla.Vector3D(0.0, 0.0, 0.0))
+                                veh.set_target_angular_velocity(carla.Vector3D(0.0, 0.0, 0.0))
+                        except Exception:
+                            pass
+
+                # Перевод вытолкнутого Target на обочине (Y >= 7.50 м) в свободный выбег (SAE J2980)
                 if target_loc.y >= 7.50:
                     try:
                         self.target_vehicle.set_autopilot(False)
@@ -842,20 +698,23 @@ class AutopilotManager:
                         pass
 
                 # --------------------------------------------------------------
-                # ФАЗА 1: Разгон и удержание дистанции в слепой зоне
+                # ФАЗА 1: Синхронный разгон и эластичная сцепка в слепой зоне
                 # --------------------------------------------------------------
                 if not self.lane_change_triggered:
                     disp = target_loc - ego_loc
                     current_lon_offset = (disp.x * ego_fw.x) + (disp.y * ego_fw.y)
                     error_x = current_lon_offset - self.initial_lon_offset
 
-                    if self.tick_count % 100 == 0:
-                        print(f"[{self.tick_count/100:4.1f}c] Ego: {ego_mps*3.6:5.1f} км/ч | "
+                    # Вывод мониторинга разгона с интервалом 1.0 с
+                    log_interval_p1 = max(1, int(round(1.0 / self.dt)))
+                    if self.tick_count % log_interval_p1 == 0:
+                        sim_time = self.tick_count * self.dt
+                        print(f"[{sim_time:4.1f}c] Ego: {ego_mps*3.6:5.1f} км/ч | "
                               f"Target: {target_mps*3.6:5.1f} км/ч | Отклонение: {error_x:+.2f} м | "
-                              f"Окно стабильности: {self.stability_counter}/100")
+                              f"Окно стабильности: {self.stability_time_sec:.2f}/1.00 c")
 
                     d_error = target_mps - ego_mps
-                    self.target_err_integral += error_x * 0.01
+                    self.target_err_integral += error_x * self.dt
                     self.target_err_integral = max(-10.0, min(self.target_err_integral, 10.0))
 
                     p_gain = 0.8
@@ -867,7 +726,9 @@ class AutopilotManager:
                     target_desired_mps = max(5.0, min(ego_mps + correction + 0.4, 40.0))
                     self.tm.set_desired_speed(self.target_vehicle, float(target_desired_mps * 3.6))
 
-                    if self.tick_count % 20 == 0 and ego_mps > self.target_v0_mps * 0.5:
+                    # Периодическая подстройка круиз-контроля Ego раз в ~0.20 с
+                    ego_corr_interval = max(1, int(round(0.20 / self.dt)))
+                    if self.tick_count % ego_corr_interval == 0 and ego_mps > self.target_v0_mps * 0.5:
                         speed_err = self.target_v0_mps - ego_mps
                         if abs(speed_err) > 0.1:
                             self.ego_tm_speed += speed_err * 0.5
@@ -878,28 +739,31 @@ class AutopilotManager:
                     is_speed_sync = abs(ego_mps - target_mps) <= 0.15
                     is_dist_sync = abs(error_x) <= 0.15
 
-                    # Проверка условий стабильности (100 тиков / 1 сек)
+                    # Проверка условий стабильности по непрерывному физическому времени (1.0 с)
                     if is_speed_ready and is_speed_sync and is_dist_sync:
+                        self.stability_time_sec += self.dt
                         self.stability_counter += 1
                     else:
+                        self.stability_time_sec = max(0.0, self.stability_time_sec - 2.0 * self.dt)
                         self.stability_counter = max(0, self.stability_counter - 2)
 
-                    # Запасной триггер после 8 секунд, если машины уже на крейсерской скорости
-                    forced_trigger = (self.tick_count >= 800 and ego_mps >= (CRUISE_SPEED_MPS - 0.5) and abs(error_x) <= 0.35)
+                    # Запасной триггер после 8.0 секунд стабильного движения
+                    sim_time = self.tick_count * self.dt
+                    forced_trigger = (sim_time >= 8.0 and ego_mps >= (CRUISE_SPEED_MPS - 0.5) and abs(error_x) <= 0.35)
 
-                    if self.stability_counter >= 100 or forced_trigger:
+                    if self.stability_time_sec >= 1.0 or forced_trigger:
                         self.lane_change_triggered = True
                         self.ego_vehicle.set_autopilot(False)
                         self.tm.set_desired_speed(self.target_vehicle, float(target_mps * 3.6))
                         print(f"\n[{snapshot.frame}] >>> МАНЕВР ИНИЦИИРОВАН ({self.subclass}): "
-                              f"Ego начинает перестроение в соседнюю полосу <<<")
+                              f"Ego начинает перестроение в слепую зону <<<")
 
                 # --------------------------------------------------------------
-                # ФАЗА 2: Перестроение при отказе LCC / Фаза шока и пост-шок водителя
+                # ФАЗА 2: Опасное перестроение и когнитивная реакция водителя
                 # --------------------------------------------------------------
                 else:
                     if not self.lost_control:
-                        # До первого удара: ведение автомобиля Ego ПИД-контроллером в целевую полосу
+                        # До первого удара: ведение автомобиля Ego ПИД-контроллером в соседнюю полосу
                         ego_wp = carla_map.get_waypoint(ego_loc, project_to_road=True)
                         if ego_wp.lane_id == self.start_lane_id:
                             if self.subclass == SUBCLASS_A:
@@ -910,7 +774,7 @@ class AutopilotManager:
                             target_lane_wp = ego_wp
 
                         if target_lane_wp is not None:
-                            target_wps = target_lane_wp.next(15.0)
+                            target_wps = target_lane_wp.next(25.0)
                             target_wp = target_wps[0] if target_wps else target_lane_wp
                             if self.pid_controller is not None:
                                 control = self.pid_controller.run_step(self.target_v0_mps * 3.6, target_wp)
@@ -920,17 +784,17 @@ class AutopilotManager:
                     else:
                         # ПОСЛЕ УДАРА: когнитивная модель водителя SAE J2980
                         ticks_since_impact = self.tick_count - self.collision_tick
+                        time_since_impact = ticks_since_impact * self.dt
 
-                        # ------------------------------------------------------
                         # 2.1. Фаза акустико-вестибулярного шока (t < T_shock)
-                        # ------------------------------------------------------
-                        if ticks_since_impact < self.shock_duration_ticks:
-                            if ticks_since_impact <= 25:
-                                # Первые 25 тиков (0.25 с): тонический мышечный спазм рук на руле
+                        if time_since_impact < self.shock_duration_sec:
+                            if time_since_impact <= 0.25:
+                                # Первые 0.25 с: тонический мышечный спазм рук на руле
                                 self.current_steer = self.impact_steer
                             else:
-                                # С 26-го тика до T_shock: пассивная релаксация руля кастором (*= 0.95)
-                                self.current_steer *= 0.95
+                                # С 0.25 с до T_shock: пассивная релаксация руля кастором подвески (инвариантно к dt)
+                                decay = math.pow(0.95, self.dt / 0.01)
+                                self.current_steer *= decay
 
                             # Педали полностью сброшены (свободный выбег coasting, БЕЗ торможения)
                             self.ego_vehicle.apply_control(carla.VehicleControl(
@@ -941,14 +805,14 @@ class AutopilotManager:
                                 manual_gear_shift=False
                             ))
 
-                        # ------------------------------------------------------
                         # 2.2. После окончания фазы шока (t >= T_shock): ветвление по driver_post_shock
-                        # ------------------------------------------------------
                         else:
+                            decay = math.pow(0.95, self.dt / 0.01)
+
                             # РЕЖИМ 1: 'passive' (По умолчанию — чистая оценка тяжести Severity S)
                             if self.driver_post_shock == 'passive':
-                                # Водитель дезориентирован/отключен: педали отпущены, руль релаксирует кастором
-                                self.current_steer *= 0.95
+                                # Водитель дезориентирован: педали сброшены, руль плавно релаксирует кастором
+                                self.current_steer *= decay
                                 self.ego_vehicle.apply_control(carla.VehicleControl(
                                     throttle=0.0,
                                     steer=float(self.current_steer),
@@ -957,7 +821,7 @@ class AutopilotManager:
                                     manual_gear_shift=False
                                 ))
 
-                            # РЕЖИМ 2: 'imperfect' (Несовершенная реакция в состоянии паники по SAE J2980)
+                            # РЕЖИМ 2: 'imperfect' (Ограниченная реакция в состоянии паники по SAE J2980)
                             elif self.driver_post_shock == 'imperfect':
                                 target_road_y = 5.625 if self.subclass == SUBCLASS_C else 1.875
                                 lateral_err = ego_loc.y - target_road_y
@@ -971,10 +835,11 @@ class AutopilotManager:
                                 desired_steer = max(-0.35, min(0.35, raw_steer))
 
                                 steer_delta = desired_steer - self.current_steer
-                                steer_step = max(-0.04, min(0.04, steer_delta))
+                                max_step = 4.0 * self.dt
+                                steer_step = max(-max_step, min(max_step, steer_delta))
                                 self.current_steer += steer_step
 
-                                # Умеренное торможение без полной блокировки колес
+                                # Умеренное торможение без блокировки колес
                                 brake_cmd = 0.35 if ego_loc.y < 7.50 else 0.20
                                 self.ego_vehicle.apply_control(carla.VehicleControl(
                                     throttle=0.0,
@@ -984,7 +849,7 @@ class AutopilotManager:
                                     manual_gear_shift=False
                                 ))
 
-                            # РЕЖИМ 3: 'active' (Активное парирование заноса для исследований Controllability C)
+                            # РЕЖИМ 3: 'active' (Агрессивное парирование заноса для исследований Controllability C)
                             else:
                                 target_road_y = 5.625 if self.subclass == SUBCLASS_C else 1.875
                                 lateral_err = ego_loc.y - target_road_y
@@ -998,7 +863,8 @@ class AutopilotManager:
                                 desired_steer = max(-1.0, min(1.0, desired_steer))
 
                                 steer_delta = desired_steer - self.current_steer
-                                steer_step = max(-0.08, min(0.08, steer_delta))
+                                max_step = 8.0 * self.dt
+                                steer_step = max(-max_step, min(max_step, steer_delta))
                                 self.current_steer += steer_step
 
                                 is_danger_zone = (ego_loc.y >= 6.50) or (ego_loc.y <= 0.50) or (abs(lateral_err) > 1.2)
@@ -1011,10 +877,12 @@ class AutopilotManager:
                                     manual_gear_shift=False
                                 ))
 
-                    # Периодический мониторинг маневра в консоль
-                    if self.tick_count % 50 == 0:
+                    # Периодический мониторинг маневра в консоль с интервалом 0.5 с
+                    log_interval_p2 = max(1, int(round(0.5 / self.dt)))
+                    if self.tick_count % log_interval_p2 == 0:
                         cur_steer = self.current_steer if self.lost_control else self.last_steer
-                        print(f"[{self.tick_count/100:4.1f}c] МАНЕВР: Ego Y={ego_loc.y:5.2f} (v={ego_mps*3.6:5.1f} км/ч) "
+                        sim_time = self.tick_count * self.dt
+                        print(f"[{sim_time:4.1f}c] МАНЕВР: Ego Y={ego_loc.y:5.2f} (v={ego_mps*3.6:5.1f} км/ч) "
                               f"| Target Y={target_loc.y:5.2f} (v={target_mps*3.6:5.1f} км/ч) | "
                               f"dY={target_loc.y - ego_loc.y:+5.2f} | Руль Ego: {cur_steer:+.3f} | Удар: {self.lost_control}")
 
@@ -1022,49 +890,64 @@ class AutopilotManager:
             traceback.print_exc()
 
     # --------------------------------------------------------------------------
-    # Расчет исхода и тяжести в кювете (SAE J2980 Appendix B)
+    # Извлечение итоговых метрик по кювету (Подкласс С)
     # --------------------------------------------------------------------------
     def compute_ditch_metrics(self):
         """
-        Возвращает оценку тяжести вылета в кювет по SAE J2980 Appendix B:
-        (sev_ditch_val, ditch_actor_str, departure_speed, max_lateral_slip,
-         wheel_furrowing_triggered, max_tilt, ditch_3d_dv)
+        Возвращает метрики схода в кювет по зафиксированным граничным условиям на бровке Y=9.75 м.
+        Если съехали оба ТС, выбирается ТС с наихудшим классом тяжести (или большей скоростью вылета).
+        Возвращает:
+        (sev_ditch_val, ditch_departure_actor, dep_speed, road_perp_speed,
+         enc_angle, lat_skid, sideslip, yaw_rate, mechanism)
         """
-        if not self.departed_actors:
-            return 0, 'None', '', '', False, '', ''
+        if not self.ditch_metrics_by_actor:
+            return 0, 'None', '', '', '', '', '', '', ''
 
-        actor_str = 'both' if len(self.departed_actors) > 1 else list(self.departed_actors)[0]
-        dep_speed = max(self.departure_speeds.values()) if self.departure_speeds else 0.0
-        max_tilt = max(self.max_tilt_deg.values()) if self.max_tilt_deg else 0.0
-        max_dv = max(self.max_ditch_3d_dv.values()) if self.max_ditch_3d_dv else 0.0
-        max_lat = max(self.max_lateral_slip.values()) if self.max_lateral_slip else 0.0
-
-        # Классификация тяжести в кювете по ISO 26262-3 / SAE J2980:
-        # S3: Опрокидывание (>= 60 град) при скорости > 15 м/с ИЛИ удар dv_3d > 12 м/с
-        if (max_tilt >= 60.0 and dep_speed > 15.0) or max_dv > 12.0:
-            sev = 3
-        # S2: Опрокидывание на малой скорости (<= 15 м/с) ИЛИ удар dv_3d > 6 м/с
-        elif (max_tilt >= 60.0 and dep_speed <= 15.0) or max_dv > 6.0:
-            sev = 2
-        # S1: Сильный крен (25 - 60 град) без переворота ИЛИ удар dv_3d > 2 м/с
-        elif (max_tilt >= 25.0) or max_dv > 2.0:
-            sev = 1
-        # S0: Плавный съезд без переворота и жестких ударов
+        # Определение строкового идентификатора участников вылета
+        if 'ego' in self.ditch_metrics_by_actor and 'target' in self.ditch_metrics_by_actor:
+            ditch_actor_str = 'both'
+        elif 'ego' in self.ditch_metrics_by_actor:
+            ditch_actor_str = 'ego'
         else:
-            sev = 0
+            ditch_actor_str = 'target'
 
-        return sev, actor_str, dep_speed, max_lat, self.wheel_furrowing_triggered, max_tilt, max_dv
+        # Выбор наихудшего исхода среди съехавших ТС
+        worst_actor = None
+        worst_sev = -1
+        worst_dep_speed = -1.0
+
+        for actor, data in self.ditch_metrics_by_actor.items():
+            sev = data['actor_sev']
+            v_dep = data['v_dep']
+            if (sev > worst_sev) or (sev == worst_sev and v_dep > worst_dep_speed):
+                worst_actor = actor
+                worst_sev = sev
+                worst_dep_speed = v_dep
+
+        best_data = self.ditch_metrics_by_actor[worst_actor]
+
+        return (
+            best_data['actor_sev'],
+            ditch_actor_str,
+            round(best_data['v_dep'], 2),
+            round(best_data['v_perp_road'], 2),
+            round(best_data['theta_enc'], 1),
+            round(best_data['v_lat_car'], 2),
+            round(best_data['beta'], 1),
+            round(best_data['omega_z'], 1),
+            best_data['mechanism']
+        )
 
     def get_barrier_collision_actor(self) -> str:
-        """Возвращает строку участника, ударившего отбойник ('ego', 'target', 'both', или '')."""
-        if 'ego' in self.barrier_departed_actors and 'target' in self.barrier_departed_actors:
+        """Возвращает строку участников удара в отбойник ('ego', 'target', 'both', или 'None')."""
+        if 'ego' in self.barrier_hit_actors and 'target' in self.barrier_hit_actors:
             return 'both'
-        elif 'ego' in self.barrier_departed_actors:
+        elif 'ego' in self.barrier_hit_actors:
             return 'ego'
-        elif 'target' in self.barrier_departed_actors:
+        elif 'target' in self.barrier_hit_actors:
             return 'target'
         else:
-            return ''
+            return 'None'
 
     def start(self):
         self.is_running = True
@@ -1079,6 +962,8 @@ class AutopilotManager:
             except Exception:
                 pass
             self.callback_id = None
+
+        # Обязательное уничтожение обоих датчиков столкновений
         if self.ego_collision_sensor is not None:
             try:
                 if self.ego_collision_sensor.is_alive:
@@ -1086,6 +971,7 @@ class AutopilotManager:
             except Exception:
                 pass
             self.ego_collision_sensor = None
+
         if self.target_collision_sensor is not None:
             try:
                 if self.target_collision_sensor.is_alive:
@@ -1093,6 +979,7 @@ class AutopilotManager:
             except Exception:
                 pass
             self.target_collision_sensor = None
+
         if self.tm is not None:
             try:
                 self.tm.set_synchronous_mode(False)
@@ -1106,31 +993,45 @@ class AutopilotManager:
 def main():
     """
     Главный оркестратор кампании моделирования HARA:
-    - Подключается к CARLA и инициализирует мир с картой 'map_ditch'
-    - Разрешает пути к ассетам OpenDRIVE (map_ditch.xodr)
-    - Компилирует сценарии Scenic для Подклассов А (отбойник) и С (кювет)
-    - Формирует план прогонов со стохастической когнитивной моделью водителя
-    - Проводит симуляции с сохранением всех 20 метрик в CSV (UTF-8-SIG)
+    - Подключается к CARLA и инициализирует мир с картой 'map_ditch'.
+    - Разрешает пути к ассетам OpenDRIVE (map_ditch.xodr).
+    - Компилирует сценарии Scenic для Подклассов А (отбойник) и С (кювет).
+    - Выполняет физические прогоны с сохранением кинематики в 25-колоночный CSV.
+    - НЕ содержит логики статистической агрегации кампании (>10%).
     """
-    parser = argparse.ArgumentParser(description="HARA LCC Blind Spot Simulation Campaign")
+    parser = argparse.ArgumentParser(description="HARA LCC Blind Spot Simulation Campaign (Physical Runner)")
     parser.add_argument('--subclass', type=str, default='ALL', choices=['A', 'C', 'ALL'],
                         help="Road subclass: 'A' (Barrier), 'C' (Ditch), or 'ALL' (Campaign)")
     parser.add_argument('--driver-post-shock', type=str, default='passive',
                         choices=['passive', 'imperfect', 'active'],
-                        help="Driver behavior mode after shock phase: 'passive' (default, coasting/engine braking for pure Severity S), 'imperfect' (limited panic recovery), or 'active' (full counter-steering & braking for Controllability C)")
+                        help="Driver behavior mode after shock phase: 'passive' (default, coasting for pure Severity S), 'imperfect' (panic recovery), or 'active' (full counter-steering for Controllability C)")
     parser.add_argument('--mode', type=str, default='equal', choices=['equal', 'sequential', 'weighted'],
                         help="Campaign mode: 'equal' (50/50: N/2 of A, N/2 of C), 'sequential' (0.2 A / 0.8 C), or 'weighted'")
     parser.add_argument('--runs', type=int, default=20, help="Total number of simulation runs (default: 20)")
-    parser.add_argument('--map-dir', type=str, default=None,
-                        help="Path to directory containing map assets (default: auto-detected)")
+    parser.add_argument('--map-dir', type=str, default=DEFAULT_MAPS_DIR,
+                        help="Path to directory containing map assets (default: maps/assets)")
     parser.add_argument('--clear', action='store_true', help="Clear/overwrite previous CSV results before running")
     parser.add_argument('--render', action='store_true', help="Enable Carla rendering window")
+    parser.add_argument('--timestep', type=float, default=0.01,
+                        help="Simulation timestep dt in seconds (default: 0.01, recommended: 0.005 - 0.025)")
+    parser.add_argument('--seed', type=int, default=42,
+                        help="Fixed random seed for deterministic Scenic scene generation and reproducibility (default: 42)")
     args = parser.parse_args()
+
+    # Фиксация случайного зерна для воспроизводимости стохастических сцен
+    if args.seed is not None:
+        random.seed(args.seed)
+        print(f"  [РЕПРОДУЦИРУЕМОСТЬ] Установлен фиксированный random seed: {args.seed}")
+
+    # Проверка диапазона шага симуляции dt
+    if args.timestep < 0.005 or args.timestep > 0.025:
+        print(f"  [ПРЕДУПРЕЖДЕНИЕ] Шаг симуляции dt={args.timestep}c находится вне рекомендованного диапазона [0.005..0.025] с. Возможна нестабильность интегратора PhysX или избыточное время моделирования.")
 
     print("=" * 80)
     print(" HARA SIMULATION CAMPAIGN: LANE CHANGE COLLISION (LCC) BLIND SPOT FAILURE")
-    print(" ISO 26262-3 / SAE J2980 Appendix B & E (Dual-Sensor & 6-Mode Terramechanics)")
-    print(f" Post-Shock Driver Mode: '{args.driver_post_shock}'")
+    print(" ISO 26262-3 / SAE J2980 (Dual Collision Sensors & Ditch Boundary Conditions)")
+    print(f" Post-Shock Driver Mode: '{args.driver_post_shock}' (Default: passive)")
+    print(f" Simulation Timestep dt: {args.timestep} s (Substepping: max_substep=0.01s, max_substeps=10)")
     print("=" * 80)
 
     # 1. Подключение к симулятору CARLA
@@ -1140,8 +1041,18 @@ def main():
         client.set_timeout(20.0)
         world = client.get_world()
         print(f"  [OK] Успешное подключение к CARLA. Текущая карта: {world.get_map().name}")
+
+        # Настройка PhysX substepping в CARLA для стабильной контактной динамики
+        settings = world.get_settings()
+        settings.synchronous_mode = True
+        settings.fixed_delta_seconds = args.timestep
+        settings.substepping = True
+        settings.max_substep_delta_time = 0.01
+        settings.max_substeps = 10
+        world.apply_settings(settings)
+        print(f"  [OK] Режим PhysX substepping включен (dt={args.timestep}c, max_substep_dt=0.01c, max_substeps=10).")
     except Exception as e:
-        print(f"  [ОШИБКА] Не удалось подключиться к CARLA: {e}")
+        print(f"  [ОШИБКА] Не удалось подключиться к CARLA / настроить PhysX: {e}")
         sys.exit(1)
 
     # Разрешение путей к карте OpenDRIVE
@@ -1155,7 +1066,7 @@ def main():
         simulator = CarlaSimulator(
             carla_map=CARLA_MAP_NAME,
             map_path=map_xodr_path,
-            timestep=0.01,
+            timestep=args.timestep,
             render=args.render
         )
         print("  [OK] CarlaSimulator успешно инициализирован.")
@@ -1163,17 +1074,17 @@ def main():
         print(f"  [ОШИБКА] Сбой инициализации CarlaSimulator: {e}")
         sys.exit(1)
 
-    # 3. Компиляция сценариев Scenic для обоих подклассов
+    # 3. Компиляция сценариев Scenic для обоих подклассов с актуальным путем к map и timestep
     print(f"\n[3/4] Компиляция Scenic сценария ({SCENIC_PATH})...")
     scenarios = {}
     try:
         scenarios[SUBCLASS_A] = scenic.scenarioFromFile(
             SCENIC_PATH,
-            params={'subclass': SUBCLASS_A, 'map': map_xodr_path}
+            params={'subclass': SUBCLASS_A, 'map': map_xodr_path, 'timestep': args.timestep}
         )
         scenarios[SUBCLASS_C] = scenic.scenarioFromFile(
             SCENIC_PATH,
-            params={'subclass': SUBCLASS_C, 'map': map_xodr_path}
+            params={'subclass': SUBCLASS_C, 'map': map_xodr_path, 'timestep': args.timestep}
         )
         print("  [OK] Сценарии для Подкласса А (Отбойник) и Подкласса С (Кювет) скомпилированы.")
     except Exception as e:
@@ -1188,12 +1099,10 @@ def main():
         campaign_plan = [SUBCLASS_C] * args.runs
     else:
         if args.mode == 'equal':
-            # Равное распределение: половина для Подкласса А, половина для Подкласса С
             runs_a = args.runs // 2
             runs_c = args.runs - runs_a
             campaign_plan = [SUBCLASS_A] * runs_a + [SUBCLASS_C] * runs_c
         elif args.mode == 'sequential':
-            # Экспозиция по дорожному профилю: 20% отбойник (А) и 80% кювет (С)
             runs_a = max(1, int(round(args.runs * 0.20)))
             runs_c = max(1, args.runs - runs_a)
             campaign_plan = [SUBCLASS_A] * runs_a + [SUBCLASS_C] * runs_c
@@ -1203,16 +1112,7 @@ def main():
     print(f"\n[4/4] Запуск кампании: всего {len(campaign_plan)} прогонов "
           f"({campaign_plan.count(SUBCLASS_A)} Подкласс А, {campaign_plan.count(SUBCLASS_C)} Подкласс С)")
 
-    # Подготовка CSV-файла с обновленной структурой (20 колонок)
-    csv_fieldnames = [
-        'run_id', 'subclass', 'driver_post_shock_mode', 'shock_duration_sec', 'side_collision',
-        'delta_v_ego_mps', 'delta_v_target_mps', 'effective_side_dv_mps',
-        'barrier_collision', 'barrier_collision_actor', 'barrier_impact_type', 'barrier_impact_mps',
-        'ditch_departure_actor', 'departure_speed_mps', 'max_lateral_slip_mps',
-        'wheel_furrowing_triggered', 'max_roll_pitch_deg', 'ditch_3d_dv_mps',
-        'severity', 'scenario_outcome'
-    ]
-
+    # Подготовка выходного CSV-файла со строгой 25-колоночной схемой
     if args.clear and os.path.isfile(CSV_PATH):
         try:
             os.remove(CSV_PATH)
@@ -1221,13 +1121,13 @@ def main():
 
     file_exists = os.path.isfile(CSV_PATH)
 
-    # Проверка совместимости формата колонок в существующем CSV-файле
+    # Проверка совместимости колонок в существующем файле
     if file_exists and not args.clear:
         try:
             with open(CSV_PATH, 'r', encoding='utf-8-sig') as f_check:
                 header_line = f_check.readline()
-                if 'barrier_collision_actor' not in header_line:
-                    # Устаревший формат колонок: создаем резервную копию и перезаписываем заголовок
+                if 'ditch_mechanism' not in header_line or 'sev_side' not in header_line:
+                    # Устаревший формат колонок: создаем резервную копию
                     backup_csv = os.path.join(RESULTS_DIR, "lcc_hara_results_legacy_backup.csv")
                     os.replace(CSV_PATH, backup_csv)
                     print(f"  [ИНФО] Старый CSV сохранен в резервную копию: {backup_csv}")
@@ -1236,7 +1136,7 @@ def main():
             pass
 
     with open(CSV_PATH, mode='w' if args.clear or not file_exists else 'a', newline='', encoding='utf-8-sig') as csv_file:
-        writer = csv.DictWriter(csv_file, fieldnames=csv_fieldnames)
+        writer = csv.DictWriter(csv_file, fieldnames=CSV_FIELDNAMES)
         if not file_exists or args.clear:
             writer.writeheader()
 
@@ -1250,41 +1150,44 @@ def main():
             print(f" Режим водителя после шока: {args.driver_post_shock}")
             print("=" * 80)
 
-            # Генерация сцены
+            # Генерация стохастической сцены Scenic
             scenario = scenarios[subclass]
             scene, _ = scenario.generate()
 
-            # Создание и запуск менеджера автопилота с выбранным режимом поведения водителя
+            # Создание и запуск менеджера симуляции
             manager = AutopilotManager(
                 client,
                 world,
                 subclass=subclass,
-                driver_post_shock=args.driver_post_shock
+                driver_post_shock=args.driver_post_shock,
+                dt=args.timestep
             )
             manager.start()
 
             try:
-                # Запуск симуляции Scenic (таймаут 30 секунд / 3000 тиков)
-                simulator.simulate(scene, maxSteps=3000)
+                # Запуск симуляции Scenic (таймаут 30 секунд физического времени)
+                max_steps = int(round(30.0 / args.timestep))
+                simulator.simulate(scene, maxSteps=max_steps)
             except Exception as e:
                 print(f"[ПРЕДУПРЕЖДЕНИЕ] Симуляция завершена или прервана: {e}")
             finally:
-                # Остановка сенсоров и колбэков тика
+                # Остановка сенсоров и колбэков
                 manager.stop()
                 time.sleep(0.3)
 
                 # --------------------------------------------------------------
-                # БЛОК 5: Каскадная агрегация метрик тяжести по ISO 26262-3
+                # Сбор и каскадная агрегация метрик тяжести по ISO 26262-3
                 # --------------------------------------------------------------
                 has_side_hit = manager.side_collision_frame is not None
                 has_barrier_hit = manager.barrier_collision_frame is not None
                 barrier_actor = manager.get_barrier_collision_actor()
 
-                # Метрики кювета
-                (sev_ditch_val, ditch_actor, dep_speed, max_lat,
-                 furrow_trig, max_tilt, ditch_dv) = manager.compute_ditch_metrics()
+                # Метрики кювета по граничным условиям
+                (sev_ditch_val, ditch_actor, dep_speed, road_perp_speed,
+                 enc_angle, lat_skid, sideslip, yaw_rate,
+                 mechanism) = manager.compute_ditch_metrics()
 
-                # Определение максимальной тяжести по всем факторам
+                # Итоговая максимальная тяжесть по одиночному прогону
                 final_sev_val = max(manager.sev_side_val, manager.sev_barrier_val, sev_ditch_val)
                 severity = f"S{final_sev_val}"
 
@@ -1292,7 +1195,7 @@ def main():
                 outcome = "Без столкновений"
                 if subclass == SUBCLASS_A:
                     b_type = manager.barrier_impact_type
-                    actor_desc = f" ({barrier_actor})" if barrier_actor else ""
+                    actor_desc = f" ({barrier_actor})" if barrier_actor != 'None' else ""
                     if has_side_hit and has_barrier_hit:
                         outcome = f"Боковой удар с целевым ТС + {b_type} удар в отбойник{actor_desc}"
                     elif has_barrier_hit:
@@ -1302,16 +1205,11 @@ def main():
                 else:  # SUBCLASS_C
                     prefix = "Боковой удар с целевым ТС + " if has_side_hit else ""
                     if ditch_actor != 'None':
-                        if max_tilt >= 60.0:
-                            outcome = f"{prefix}Вылет в кювет ({ditch_actor}) с опрокидыванием ({severity})"
-                        elif furrow_trig:
-                            outcome = f"{prefix}Вылет в кювет ({ditch_actor}) с зарыванием в грунт ({severity})"
-                        else:
-                            outcome = f"{prefix}Съезд в кювет ({ditch_actor}) без опрокидывания ({severity})"
+                        outcome = f"{prefix}{mechanism} ({ditch_actor}) ({severity})"
                     elif has_side_hit:
                         outcome = "Боковой удар с целевым ТС (Без съезда в кювет)"
 
-                # Формирование строки для CSV
+                # Формирование строки для CSV (строго 25 колонок)
                 row_data = {
                     'run_id': run_idx,
                     'subclass': subclass,
@@ -1321,16 +1219,21 @@ def main():
                     'delta_v_ego_mps': round(manager.delta_v_ego, 2) if has_side_hit else '',
                     'delta_v_target_mps': round(manager.delta_v_target, 2) if has_side_hit else '',
                     'effective_side_dv_mps': round(manager.effective_side_delta_v, 2) if has_side_hit else '',
+                    'sev_side': f"S{manager.sev_side_val}",
                     'barrier_collision': has_barrier_hit,
                     'barrier_collision_actor': barrier_actor,
                     'barrier_impact_type': manager.barrier_impact_type if has_barrier_hit else '',
                     'barrier_impact_mps': round(manager.barrier_impact_speed, 2) if has_barrier_hit else '',
+                    'sev_barrier': f"S{manager.sev_barrier_val}",
                     'ditch_departure_actor': ditch_actor,
-                    'departure_speed_mps': round(dep_speed, 2) if ditch_actor != 'None' else '',
-                    'max_lateral_slip_mps': round(max_lat, 2) if ditch_actor != 'None' else '',
-                    'wheel_furrowing_triggered': furrow_trig,
-                    'max_roll_pitch_deg': round(max_tilt, 1) if ditch_actor != 'None' else '',
-                    'ditch_3d_dv_mps': round(ditch_dv, 2) if ditch_actor != 'None' else '',
+                    'departure_speed_mps': dep_speed if ditch_actor != 'None' else '',
+                    'road_perp_speed_mps': road_perp_speed if ditch_actor != 'None' else '',
+                    'encroachment_angle_deg': enc_angle if ditch_actor != 'None' else '',
+                    'vehicle_lat_skid_mps': lat_skid if ditch_actor != 'None' else '',
+                    'sideslip_angle_deg': sideslip if ditch_actor != 'None' else '',
+                    'departure_yaw_rate_deg_s': yaw_rate if ditch_actor != 'None' else '',
+                    'ditch_mechanism': mechanism if ditch_actor != 'None' else '',
+                    'sev_ditch': f"S{sev_ditch_val}",
                     'severity': severity,
                     'scenario_outcome': outcome
                 }
@@ -1338,7 +1241,7 @@ def main():
                 writer.writerow(row_data)
                 csv_file.flush()
 
-                # Сводный отчет в консоль
+                # Сводный вывод в консоль
                 print("\n" + "-" * 80)
                 print(f"ИТОГ ПРОГОНА [{run_idx}]:")
                 print(f"  * Подкласс: {subclass}")
@@ -1350,16 +1253,19 @@ def main():
                     print(f"  * Удар в отбойник: {has_barrier_hit} " +
                           (f"({manager.barrier_impact_type}, {manager.barrier_impact_speed:.2f} м/с, актер: {barrier_actor}, S_barrier: S{manager.sev_barrier_val})" if has_barrier_hit else ""))
                 else:
-                    print(f"  * Сход в кювет: {ditch_actor} " +
-                          (f"(Скорость: {dep_speed:.2f} м/с, Крен: {max_tilt:.1f}°, 3D Delta-V: {ditch_dv:.2f} м/с, S_ditch: S{sev_ditch_val})" if ditch_actor != 'None' else ""))
-                print(f"  * Итоговая тяжесть ISO 26262-3: >>> {severity} <<<")
+                    print(f"  * Вылет в кювет: {ditch_actor} " +
+                          (f"(Скорость: {dep_speed:.2f} м/с, Угол beta: {sideslip:.1f}°, Механизм: '{mechanism}', S_ditch: S{sev_ditch_val})" if ditch_actor != 'None' else ""))
+                print(f"  * Итоговая тяжесть прогона: >>> {severity} <<<")
                 print(f"  * Исход: {outcome}")
                 print("-" * 80)
 
-                time.sleep(0.5)
+                time.sleep(0.3)
 
     print("\n" + "=" * 80)
-    print(f"КАМПАНИЯ ЗАВЕРШЕНА! Результаты сохранены в: {CSV_PATH}")
+    print(f"КАМПАНИЯ СИМУЛЯЦИЙ ЗАВЕРШЕНА!")
+    print(f"Результаты записаны в: {CSV_PATH}")
+    print(f"Для статистического анализа по правилу >10% ISO 26262-3 запустите:")
+    print(f"  python analyze_results.py --input {CSV_PATH}")
     print("=" * 80)
 
 
