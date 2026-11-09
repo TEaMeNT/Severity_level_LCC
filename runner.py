@@ -33,6 +33,7 @@ import argparse
 import traceback
 
 # Настройка кодировки стандартного вывода на Windows для предотвращения кракозябр
+
 if sys.platform == 'win32':
     try:
         sys.stdout.reconfigure(encoding='utf-8')
@@ -45,11 +46,12 @@ import scenic
 from scenic.simulators.carla.simulator import CarlaSimulator
 
 # ------------------------------------------------------------------------------
-# Carla Python API Configuration
+# Carla Python API Configuration (C:\CARLA)
 # ------------------------------------------------------------------------------
 CARLA_API_PATH = r"C:\CARLA\PythonAPI\carla"
-if CARLA_API_PATH not in sys.path:
+if CARLA_API_PATH not in sys.path and os.path.isdir(CARLA_API_PATH):
     sys.path.append(CARLA_API_PATH)
+
 try:
     from agents.navigation.controller import VehiclePIDController  # type: ignore
 except ImportError:
@@ -68,9 +70,8 @@ CARLA_MAP_NAME = "map_ditch"
 DEFAULT_MAPS_DIR = os.path.join(BASE_DIR, "maps", "assets")
 FALLBACK_MAP_DIRS = [
     DEFAULT_MAPS_DIR,
+    os.path.join(BASE_DIR, "maps"),
     os.path.join(BASE_DIR, "..", "maps", "assets"),
-    r"C:\Users\teament\Desktop\xlam\Severity_level_LCC\maps\assets",
-    r"C:\Users\teament\Desktop\xlam\work\maps\assets",
     BASE_DIR,
 ]
 

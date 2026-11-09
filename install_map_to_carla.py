@@ -22,26 +22,12 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 SOURCE_CONTENT_DIR = os.path.join(BASE_DIR, "maps", "carla_content")
 SOURCE_ASSETS_DIR = os.path.join(BASE_DIR, "maps", "assets")
 
-DEFAULT_CARLA_PATHS = [
-    r"C:\CARLA",
-    r"D:\CARLA",
-    os.environ.get("CARLA_ROOT", ""),
-]
+DEFAULT_CARLA_DIR = r"C:\CARLA"
 
 
 def find_carla_dir(custom_path: str = None) -> str:
-    candidates = []
-    if custom_path:
-        candidates.append(os.path.abspath(custom_path))
-    candidates.extend([p for p in DEFAULT_CARLA_PATHS if p])
-
-    for c_path in candidates:
-        if os.path.isdir(c_path):
-            exe_path = os.path.join(c_path, "CarlaUE4.exe")
-            content_path = os.path.join(c_path, "CarlaUE4", "Content")
-            if os.path.isfile(exe_path) or os.path.isdir(content_path):
-                return c_path
-    return None
+    path = os.path.abspath(custom_path) if custom_path else DEFAULT_CARLA_DIR
+    return path if os.path.isdir(path) else None
 
 
 def install_assets(carla_root: str):
@@ -104,7 +90,7 @@ def install_assets(carla_root: str):
 
 def main():
     parser = argparse.ArgumentParser(description="Автономный установщик карты map_ditch в CARLA")
-    parser.add_argument("--carla-dir", type=str, default=None, help="Путь к папке CARLA (по умолчанию автопоиск)")
+    parser.add_argument("--carla-dir", type=str, default=DEFAULT_CARLA_DIR, help="Путь к папке CARLA (по умолчанию C:\\CARLA)")
     args = parser.parse_args()
 
     carla_dir = find_carla_dir(args.carla_dir)

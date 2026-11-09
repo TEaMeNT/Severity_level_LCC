@@ -24,7 +24,7 @@
 #   TARGET_CENTER_Y_BACK = BOTTOM_BLIND_SPOT = -5.465 м
 # ==============================================================================
 
-param map = "C:/Users/teament/Desktop/xlam/work/maps/assets/map_ditch.xodr"
+param map = localPath("maps/assets/map_ditch.xodr")
 param carla_map = 'map_ditch'
 param use2DMap = True
 param render = False
