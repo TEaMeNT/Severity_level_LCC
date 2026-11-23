@@ -13,15 +13,15 @@
 #   * локальная ось X направлена вправо/влево от кузова ТС (поперечная координата);
 #   * локальная ось Y направлена вперед/назад от кузова ТС (продольная координата).
 #
-# ПАРАМЕТРЫ СЛЕПОЙ ЗОНЫ (Строго по исходному ТЗ проекта, неизменяемые константы):
-#   EGO_LENGTH = 4.93 м, EGO_WIDTH = 1.86 м (седан Lincoln MKZ 2017)
-#   TARGET_LENGTH = 4.18 м, TARGET_WIDTH = 1.83 м (купе Audi TT)
-#   TOP_BLIND_SPOT = (EGO_LENGTH / 2) - 2.0 = +0.465 м (граница у центральной стойки)
-#   BOTTOM_BLIND_SPOT = -(EGO_LENGTH / 2) - 3.0 = -5.465 м (3 м позади заднего бампера)
-#   NEAR_BLIND_SPOT = 1.01 м (боковой зазор до борта)
+# ПАРАМЕТРЫ СЛЕПОЙ ЗОНЫ И ГАБАРИТЫ (CARLA 0.9.16 bbox, геометрия слепой зоны неизменна):
+#   EGO_LENGTH = 5.36 м, EGO_WIDTH = 2.03 м (vehicle.chevrolet.impala: 5.3575 x 2.0332 м)
+#   TARGET_LENGTH = 4.19 м, TARGET_WIDTH = 1.82 м (vehicle.seat.leon: 4.1928 x 1.8162 м)
+#   TOP_BLIND_SPOT = (EGO_LENGTH / 2) - 2.0 = +0.68 м (2.0 м от переднего бампера)
+#   BOTTOM_BLIND_SPOT = -(EGO_LENGTH / 2) - 3.0 = -5.68 м (3.0 м позади заднего бампера)
+#   NEAR_BLIND_SPOT = 1.01 м (боковой зазор до оси Ego)
 #   FAR_BLIND_SPOT = 4.15 м (внешняя граница смежной полосы)
-#   TARGET_CENTER_Y_FRONT = TOP_BLIND_SPOT - (TARGET_LENGTH / 2) = -1.625 м
-#   TARGET_CENTER_Y_BACK = BOTTOM_BLIND_SPOT = -5.465 м
+#   TARGET_CENTER_Y_FRONT = TOP_BLIND_SPOT - (TARGET_LENGTH / 2) = -1.415 м
+#   TARGET_CENTER_Y_BACK = BOTTOM_BLIND_SPOT = -5.680 м
 # ==============================================================================
 
 param map = localPath("maps/assets/map_ditch.xodr")
@@ -32,11 +32,11 @@ param timestep = 0.01
 param weather = 'ClearNoon'
 model scenic.simulators.carla.model
 
-# Геометрические габариты участников сценария
-EGO_LENGTH = 4.93    # длина Lincoln MKZ 2017 в CARLA
-EGO_WIDTH = 1.86     # ширина Lincoln MKZ 2017 в CARLA
-TARGET_LENGTH = 4.18 # длина Audi TT в CARLA
-TARGET_WIDTH = 1.83  # ширина Audi TT в CARLA
+# Геометрические габариты участников сценария (точные значения CARLA 0.9.16)
+EGO_LENGTH = 5.36    # длина vehicle.chevrolet.impala в CARLA (5.3575 м)
+EGO_WIDTH = 2.03     # ширина vehicle.chevrolet.impala в CARLA (2.0332 м)
+TARGET_LENGTH = 4.19 # длина vehicle.seat.leon в CARLA (4.1928 м)
+TARGET_WIDTH = 1.82  # ширина vehicle.seat.leon в CARLA (1.8162 м)
 
 class EgoCar(Car):
     width: EGO_WIDTH  
@@ -58,8 +58,10 @@ TARGET_CENTER_Y_BACK = BOTTOM_BLIND_SPOT
 
 # Параметр подкласса дорожных условий:
 # 'SUBCLASS_A_BARRIER' - левая полоса ограничена отбойником (маневр влево)
-# 'SUBCLASS_C_DITCH'   - правая полоса ограничена кюветом (маневр вправо)
-param subclass = 'SUBCLASS_C_DITCH'
+# 'SUBCLASS_B_DITCH'   - правая полоса ограничена кюветом (маневр вправо)
+param subclass = 'SUBCLASS_B_DITCH'
+# Стохастическая снаряжённая масса Target (кг): B/C/D/SUV выборка (EEA / парк РФ)
+param target_mass_kg = TruncatedNormal(1480.0, 220.0, 1100.0, 2050.0)
 SPEED_MPS = 100 / 3.6
 start_x = 50
 
@@ -68,14 +70,16 @@ start_x = 50
 # - start_y задает стартовую полосу автомобиля Ego:
 #   * Для Подкласса А: Lane -2 (правая полоса, start_y = -5.625).
 #     Целевое ТС располагается в ЛЕВОЙ слепой зоне: target_offset_x < 0.
-#   * Для Подкласса С: Lane -1 (левая полоса, start_y = -1.875).
+#   * Для Подкласса B: Lane -1 (левая полоса, start_y = -1.875).
 #     Целевое ТС располагается в ПРАВОЙ слепой зоне: target_offset_x > 0.
 if globalParameters.subclass == 'SUBCLASS_A_BARRIER':
     start_y = -5.625
     target_offset_x = Range(-FAR_BLIND_SPOT, -(NEAR_BLIND_SPOT + TARGET_WIDTH / 2 + 0.1))
-else:
+elif globalParameters.subclass == 'SUBCLASS_B_DITCH':
     start_y = -1.875
     target_offset_x = Range(NEAR_BLIND_SPOT + TARGET_WIDTH / 2 + 0.1, FAR_BLIND_SPOT)
+else:
+    raise ValueError("Unsupported subclass parameter: " + repr(globalParameters.subclass))
 
 # Продольное смещение по исходному ТЗ: случайная точка в пределах слепой зоны
 target_offset_y = Range(TARGET_CENTER_Y_BACK, TARGET_CENTER_Y_FRONT)
@@ -88,16 +92,18 @@ behavior TrafficManagerBehavior():
 # Спавн основного ТС (EgoCar) на крейсерской позиции
 ego = new EgoCar at (start_x, start_y, 0.2),
     facing roadDirection,
-    with blueprint 'vehicle.lincoln.mkz_2017',
+    with blueprint 'vehicle.chevrolet.impala',
+    with rolename 'ego',
     with behavior TrafficManagerBehavior()
 
 # Спавн целевого ТС (TargetCar) со смещением в слепую зону
 target = new TargetCar offset by Vector(target_offset_x, target_offset_y),
     facing roadDirection,
-    with blueprint 'vehicle.audi.tt',
+    with blueprint 'vehicle.seat.leon',
+    with rolename 'target',
     with behavior TrafficManagerBehavior()
 
-# Ограничение длительности симуляции одного прогона (30 секунд = 3000 тиков)
-terminate after 30 seconds
+# Ограничение длительности симуляции одного прогона (45 секунд = 4500 тиков при dt=0.01)
+terminate after 45 seconds
 
 param v0_val = SPEED_MPS

@@ -50,3 +50,16 @@ ehthumbs.db
 Desktop.ini
 $RECYCLE.BIN/
 .DS_Store
+
+# Logs & frame telemetry
+*.log
+results/frame_logs/
+**/frame_logs/
+
+# Documents & PDFs
+*.docx
+SAE*
+
+# Prompts & AI guidelines
+*prompt*
+[Gg][Ee][Mm][Ii][Nn][Ii].[Mm][Dd]
