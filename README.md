@@ -21,33 +21,64 @@
 
 ```text
 Severity_level_LCC/
-├── runner.py                  # Главный управляющий оркестратор HARA симуляции в CARLA
-├── analyze_results.py         # Статистический анализ ISO 26262-3 / SAE J2980:2023 и графики
-├── test_shoulder_friction.py  # Скрипт стендовой калибровки FrictionScale (асфальт / гравий)
-├── LCC_blindSpot.scenic       # Сценарий Scenic с геометрическими границами слепой зоны
-├── install_map_to_carla.py    # Скрипт автоматического развертывания ассетов карты в CARLA
+├── src/
+│   └── hara_lcc/                     # Модульный пакет HARA (SRP-архитектура)
+│       ├── config.py                 # Single Source of Truth: Config F, пороги S0–S3, геометрия, 25 колонок CSV
+│       ├── severity/                 # Чистые классификаторы (Delta-V, барьер, Variant B кювет) и ISO 26262-3 / ASIL
+│       │   ├── classifiers.py
+│       │   └── iso26262.py
+│       ├── driver/                   # Изолированная модель водителя (T_react/T_hold, passive/active, Kamm+Sideslip ABS)
+│       │   ├── reaction.py
+│       │   └── post_impact.py
+│       ├── simulation/               # Физика CARLA (Config F, EBD, friction trigger), телеметрия, AutopilotManager, CLI
+│       │   ├── assets.py
+│       │   ├── physics.py
+│       │   ├── telemetry.py
+│       │   ├── manager.py
+│       │   └── campaign.py
+│       └── analysis/                 # Загрузчик CSV, статистика (Уилсон/Клоппер–Пирсон), 5 графиков, отчёт, CLI
+│           ├── loader.py
+│           ├── stats.py
+│           ├── plots.py
+│           ├── report.py
+│           └── cli.py
+├── tests/                            # Постоянный оффлайн-набор автотестов (pytest)
+│   ├── test_schema_and_config.py
+│   ├── test_severity_classifiers.py
+│   ├── test_driver_model.py
+│   ├── test_analysis_and_report.py
+│   └── test_scenic_offline.py
+├── runner.py                         # Тонкая CLI-обёртка над hara_lcc.simulation.campaign
+├── analyze_results.py                # Тонкая CLI-обёртка над hara_lcc.analysis.cli
+├── test_shoulder_friction.py         # Скрипт стендовой калибровки FrictionScale (асфальт / гравий)
+├── install_map_to_carla.py           # Скрипт автоматического развертывания ассетов карты в CARLA
+├── LCC_blindSpot.scenic              # Сценарий Scenic с геометрическими границами слепой зоны
 ├── templates/
-│   └── report_template.md     # Markdown-шаблон отчета summary_report.md
-├── map_ditch.xodr             # Локальная дорожная сеть OpenDRIVE (1500 м трассы)
-├── map_ditch.snet             # Локальная сеть вейпоинтов Scenic
-├── map_ditch.fbx              # 3D-модель трассы, обочины, кювета и барьера
+│   └── report_template.md            # Markdown-шаблон отчета summary_report.md
 ├── maps/
-│   ├── assets/                # Исходные файлы трассы (XODR, FBX, SNET, Package.json)
-│   └── carla_content/         # Скомпилированные бинарные ассеты Unreal Engine (.umap, .uasset, .uexp)
+│   ├── assets/                       # Канонические исходники карты (map_ditch.xodr, .fbx, .snet, .Package.json)
+│   └── carla_content/                # Скомпилированные бинарные ассеты Unreal Engine (.umap, .uasset, .uexp)
 ├── results/
-│   └── lcc_hara_results.csv   # Итоговый CSV-отчет с 25 колонками каждого прогона (UTF-8-SIG)
-├── .gitignore                 # Правила исключения временных файлов Python, кэша и бинарников
-└── README.md                  # Данная документация
+│   ├── lcc_hara_results.csv          # Эталонный CSV-отчет с 25 колонками каждого прогона (UTF-8-SIG)
+│   ├── summary_report.md             # Эталонный аналитический отчёт HARA
+│   └── plots/                        # 5 публикационных графиков (300 DPI)
+├── pyproject.toml                    # Конфигурация пакета hara-lcc и pytest
+├── .gitignore                        # Правила исключения временных файлов Python, кэша и бинарников
+└── README.md                         # Данная документация
 ```
 
 ---
 
 ## 🚀 Быстрый запуск на любом ПК
 
-### 1. Системные требования
+### 1. Системные требования и установка пакета
 * **ОС:** Windows 10/11 x64
 * **Симулятор:** CARLA Simulator 0.9.14+ (по умолчанию в `C:\CARLA`)
-* **Python:** 3.8–3.12 с установленными пакетами: `carla`, `scenic`, `numpy`, `matplotlib`
+* **Python:** 3.10–3.12 с установленными пакетами: `carla`, `scenic`, `numpy`, `scipy`, `matplotlib`, `pytest`
+* **Локальная editable-установка пакета `hara-lcc`:**
+```bash
+python -m pip install --no-deps --no-build-isolation -e .
+```
 
 ### 2. Установка карты в CARLA (выполняется один раз)
 Скрипт автоматически скопирует скомпилированные карты `.umap` и меши `.uasset`/`.uexp` в директорию `Content` симулятора CARLA:
@@ -90,6 +121,12 @@ python runner.py --subclass A --runs 2 --timestep 0.01 --render
 python analyze_results.py --input results/lcc_hara_results.csv --active-input results/lcc_hara_active.csv --output-dir results
 ```
 Команда формирует итоговый аналитический отчёт `results/summary_report.md` и 5 публикационных графиков (300 DPI) в папке `results/plots/`.
+
+### 6. Запуск оффлайн-автотестов (`pytest`)
+Постоянный набор автотестов проверяет схему 25 колонок CSV, классификаторы `S0–S3` и Variant B (включая эталонные кейсы `v1.0-severity-baseline`), изолированную модель водителя `src/hara_lcc/driver/`, статистику/ASIL/рендер отчёта, генерацию 5 графиков и оффлайн-сэмплирование сцен Scenic (`N = 500` на подкласс, `0` коллизий спавна) **без запущенной CARLA**:
+```bash
+python -m pytest -v
+```
 
 ---
 

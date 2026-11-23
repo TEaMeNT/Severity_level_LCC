@@ -63,3 +63,8 @@ SAE*
 # Prompts & AI guidelines
 *prompt*
 [Gg][Ee][Mm][Ii][Nn][Ii].[Mm][Dd]
+
+# Test & scratch artifacts
+.pytest_cache/
+scratch/
+
