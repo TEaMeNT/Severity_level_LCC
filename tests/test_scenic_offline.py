@@ -2,13 +2,21 @@
 
 from __future__ import annotations
 
+import csv
+from pathlib import Path
 import random
 
 import pytest
 import scenic
 
 from hara_lcc.config import SCENIC_PATH, SUBCLASS_A, SUBCLASS_B
+from hara_lcc.driver.reaction import sample_reaction_and_hold_times
 from hara_lcc.simulation.assets import resolve_map_assets
+from hara_lcc.simulation.campaign import (
+    build_campaign_plan,
+    fast_forward_skipped_run,
+    parse_run_ids,
+)
 
 EGO_LENGTH = 5.36
 EGO_WIDTH = 2.03
@@ -54,3 +62,39 @@ def test_scenic_offline_scene_generation_500_per_subclass(subclass: str):
         assert 1100.0 <= target_mass <= 2050.0
 
     assert spawn_collisions == 0
+
+
+def test_run_ids_prng_fast_forward_matches_baseline_csv(baseline_csv_path: Path):
+    """Проверка 1-в-1 совпадения PRNG-перемотки (--run-ids) с эталонными прогонами v1.0."""
+    _, map_xodr_path = resolve_map_assets()
+    scenarios = {
+        s: scenic.scenarioFromFile(SCENIC_PATH, params={'subclass': s, 'map': map_xodr_path, 'timestep': 0.01})
+        for s in (SUBCLASS_A, SUBCLASS_B)
+    }
+    with open(baseline_csv_path, mode='r', encoding='utf-8-sig') as f:
+        rows = {int(r['run_id']): r for r in csv.DictReader(f)}
+
+    selected = parse_run_ids(["24,43,49", "113-116", "200"], total_runs=200)
+    assert selected == {24, 43, 49, 113, 114, 115, 116, 200}
+
+    random.seed(42)
+    plan = build_campaign_plan('ALL', 'equal', 200)
+    replayed = {}
+    for run_idx, subclass in enumerate(plan, start=1):
+        if run_idx > max(selected):
+            break
+        scenario = scenarios[subclass]
+        if run_idx not in selected:
+            fast_forward_skipped_run(scenario)
+            continue
+        scene, _ = scenario.generate()
+        t_ego, _ = sample_reaction_and_hold_times()
+        sample_reaction_and_hold_times()
+        replayed[run_idx] = (subclass, round(t_ego, 3), float(scene.params['target_mass_kg']))
+
+    assert set(replayed.keys()) == selected
+    for rid, (sub, t_react, target_mass) in replayed.items():
+        assert sub == rows[rid]['subclass']
+        assert t_react == float(rows[rid]['shock_duration_sec'])
+        assert 1100.0 <= target_mass <= 2050.0
+

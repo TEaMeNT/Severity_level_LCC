@@ -5,8 +5,10 @@ from hara_lcc.simulation.campaign import (
     build_arg_parser,
     build_campaign_plan,
     build_csv_row,
+    fast_forward_skipped_run,
     format_scenario_outcome,
     main,
+    parse_run_ids,
     run_campaign,
 )
 from hara_lcc.simulation.manager import AutopilotManager
@@ -35,8 +37,10 @@ __all__ = [
     "configure_world_physx",
     "enforce_frame_log_quota",
     "extract_telemetry_frame",
+    "fast_forward_skipped_run",
     "format_scenario_outcome",
     "main",
+    "parse_run_ids",
     "prepare_frame_logs_dir",
     "resolve_map_assets",
     "run_campaign",

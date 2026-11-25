@@ -324,8 +324,8 @@ class AutopilotManager:
             cur_impact_type = barrier_metrics.impact_type
             cur_sev = barrier_metrics.sev_barrier
 
+            is_new_actor = source_actor not in self.barrier_hit_actors
             self.barrier_hit_actors.add(source_actor)
-
             # Сохранение первичного или наихудшего удара
             is_first = (self.barrier_collision_frame is None)
             is_worse = (cur_sev > self.sev_barrier_val) or (
@@ -337,13 +337,13 @@ class AutopilotManager:
                 self.barrier_impact_speed = v_barrier
                 self.barrier_impact_type = cur_impact_type
                 self.sev_barrier_val = cur_sev
-
-            print(
-                f"\n[{frame}] ->> УДАР ОБ ОГРАЖДЕНИЕ ({source_actor.upper()}): "
-                f"Тип: {cur_impact_type} | "
-                f"Скорость удара = {v_barrier:.2f} м/с | "
-                f"S_barrier = S{cur_sev} (макс. по прогону: S{self.sev_barrier_val})"
-            )
+            if is_first or is_worse or is_new_actor:
+                print(
+                    f"\n[{frame}] ->> УДАР ОБ ОГРАЖДЕНИЕ ({source_actor.upper()}): "
+                    f"Тип: {cur_impact_type} | "
+                    f"Скорость удара = {v_barrier:.2f} м/с | "
+                    f"S_barrier = S{cur_sev} (макс. по прогону: S{self.sev_barrier_val})"
+                )
 
             self._activate_shock_phase(frame)
 

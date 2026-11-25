@@ -59,7 +59,9 @@ from hara_lcc.severity import (  # noqa: E402, F401
 from hara_lcc.simulation import (  # noqa: E402, F401
     AutopilotManager,
     build_arg_parser,
+    fast_forward_skipped_run,
     main,
+    parse_run_ids,
     resolve_map_assets,
 )
 

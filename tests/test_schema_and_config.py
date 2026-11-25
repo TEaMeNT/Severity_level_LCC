@@ -13,6 +13,7 @@ import pytest
 
 from hara_lcc import config
 from hara_lcc.simulation.assets import resolve_map_assets
+from hara_lcc.simulation.campaign import parse_run_ids
 from hara_lcc.simulation.physics import configure_ego_physics, configure_target_physics
 
 
@@ -207,4 +208,28 @@ def test_cold_start_cli_help_subprocesses(project_root: Path, script_name: str):
         check=False,
     )
     assert proc.returncode == 0, f"{script_name} --help failed:\n{proc.stderr}"
+
+
+def test_parse_run_ids_variants_and_validation():
+    assert parse_run_ids(None, 200) is None
+    assert parse_run_ids(["113"], 200) == {113}
+    assert parse_run_ids(["24,49,113"], 200) == {24, 49, 113}
+    assert parse_run_ids(["24", "49", "113-116"], 200) == {24, 49, 113, 114, 115, 116}
+    assert parse_run_ids("113-115, 114", 200) == {113, 114, 115}
+
+    with pytest.raises(ValueError, match="выходит за пределы"):
+        parse_run_ids(["113"], 20)
+    with pytest.raises(ValueError):
+        parse_run_ids(["0"], 200)
+    with pytest.raises(ValueError):
+        parse_run_ids(["116-113"], 200)
+    with pytest.raises(ValueError):
+        parse_run_ids(["abc"], 200)
+
+    runner_mod = importlib.import_module("runner")
+    args = runner_mod.build_arg_parser().parse_args([
+        "--runs", "200", "--mode", "equal", "--seed", "42", "--run-ids", "24,49", "113-116",
+    ])
+    assert parse_run_ids(args.run_ids, args.runs) == {24, 49, 113, 114, 115, 116}
+
 

@@ -27,6 +27,7 @@ from hara_lcc.config import (
     SUBCLASS_B,
     TARGET_MASS_DEFAULT,
 )
+from hara_lcc.driver.reaction import sample_reaction_and_hold_times
 from hara_lcc.simulation.assets import resolve_map_assets
 from hara_lcc.simulation.manager import AutopilotManager
 from hara_lcc.simulation.physics import configure_world_physx
@@ -61,6 +62,68 @@ def build_campaign_plan(subclass: str, mode: str, runs: int, rng=random) -> list
         runs_b = max(1, runs - runs_a)
         return [SUBCLASS_A] * runs_a + [SUBCLASS_B] * runs_b
     return rng.choices([SUBCLASS_A, SUBCLASS_B], weights=[DEFAULT_WEIGHT_A, DEFAULT_WEIGHT_B], k=runs)
+
+
+def parse_run_ids(raw_values: list[str] | str | None, total_runs: int) -> set[int] | None:
+    """
+    Парсинг списка/диапазонов номеров прогонов (--run-ids) в множество 1-based индексов.
+    Поддерживает форматы: '113', '24,49,113', '113-116', ['24', '113-116'].
+    Если raw_values is None — возвращает None (запускаются все прогоны 1..total_runs).
+    """
+    if raw_values is None:
+        return None
+
+    tokens: list[str] = []
+    if isinstance(raw_values, str):
+        raw_items = [raw_values]
+    else:
+        raw_items = list(raw_values)
+
+    for item in raw_items:
+        for part in str(item).replace(";", ",").split(","):
+            cleaned = part.strip()
+            if cleaned:
+                tokens.append(cleaned)
+
+    if not tokens:
+        raise ValueError("Аргумент --run-ids не содержит ни одного номера прогона.")
+
+    selected: set[int] = set()
+    for tok in tokens:
+        if "-" in tok:
+            bounds = tok.split("-")
+            if len(bounds) != 2 or not bounds[0].strip().isdigit() or not bounds[1].strip().isdigit():
+                raise ValueError(f"Некорректный диапазон в --run-ids: {tok!r} (ожидается формат 'A-B').")
+            start_id = int(bounds[0].strip())
+            end_id = int(bounds[1].strip())
+            if start_id < 1 or end_id < start_id:
+                raise ValueError(f"Некорректные границы диапазона в --run-ids: {tok!r}.")
+            ids_to_add = range(start_id, end_id + 1)
+        else:
+            if not tok.isdigit():
+                raise ValueError(f"Некорректный номер прогона в --run-ids: {tok!r}.")
+            ids_to_add = (int(tok),)
+
+        for rid in ids_to_add:
+            if rid < 1 or rid > total_runs:
+                raise ValueError(
+                    f"run_id={rid} выходит за пределы плана кампании 1..{total_runs} "
+                    f"(укажите исходное --runs, например '--runs 200 --mode equal --seed 42')."
+                )
+            selected.add(rid)
+
+    return selected
+
+
+def fast_forward_skipped_run(scenario, rng=random) -> None:
+    """
+    Пропуск одного прогона в памяти с точным сохранением состояния глобального PRNG:
+    выполняет те же вызовы scenario.generate() и 2x sample_reaction_and_hold_times()
+    (для Ego и Target), что и полный запуск AutopilotManager.
+    """
+    scenario.generate()
+    sample_reaction_and_hold_times(rng=rng)
+    sample_reaction_and_hold_times(rng=rng)
 
 
 def format_scenario_outcome(
@@ -207,6 +270,10 @@ def build_arg_parser() -> argparse.ArgumentParser:
         '--seed', type=int, default=42,
         help="Fixed random seed for deterministic Scenic scene generation and reproducibility (default: 42)",
     )
+    parser.add_argument(
+        '--run-ids', nargs='+', default=None,
+        help="Replay only specific 1-based run IDs from the campaign plan via exact PRNG fast-forward (e.g. '113', '24,49,113', '113-116')",
+    )
     return parser
 
 
@@ -300,13 +367,27 @@ def run_campaign(args: argparse.Namespace):
         print(f"  [ОШИБКА] Сбой компиляции Scenic: {e}")
         sys.exit(1)
 
-    # 4. Формирование плана кампании
+    # 4. Формирование плана кампании и опционального фильтра выборочного реплея (--run-ids)
     campaign_plan = build_campaign_plan(args.subclass, args.mode, args.runs)
+    try:
+        selected_run_ids = parse_run_ids(getattr(args, 'run_ids', None), total_runs=len(campaign_plan))
+    except ValueError as e:
+        print(f"  [ОШИБКА] {e}")
+        sys.exit(1)
 
-    print(
-        f"\n[4/4] Запуск кампании: всего {len(campaign_plan)} прогонов "
-        f"({campaign_plan.count(SUBCLASS_A)} Подкласс А, {campaign_plan.count(SUBCLASS_B)} Подкласс B)"
-    )
+    if selected_run_ids is not None:
+        sorted_ids = sorted(selected_run_ids)
+        max_target_run = sorted_ids[-1]
+        print(
+            f"\n[4/4] Выборочный реплей по плану из {len(campaign_plan)} прогонов: "
+            f"run_ids={sorted_ids} (быстрая перемотка PRNG для пропущенных прогонов)"
+        )
+    else:
+        max_target_run = len(campaign_plan)
+        print(
+            f"\n[4/4] Запуск кампании: всего {len(campaign_plan)} прогонов "
+            f"({campaign_plan.count(SUBCLASS_A)} Подкласс А, {campaign_plan.count(SUBCLASS_B)} Подкласс B)"
+        )
 
     # Подготовка выходного CSV-файла со строгой 25-колоночной схемой
     if args.clear and os.path.isfile(output_csv_path):
@@ -344,7 +425,14 @@ def run_campaign(args: argparse.Namespace):
         # Цикл прогонов HARA кампании
         # ----------------------------------------------------------------------
         for run_idx, subclass in enumerate(campaign_plan, start=1):
+            if run_idx > max_target_run:
+                break
+
             scenario = scenarios[subclass]
+            if selected_run_ids is not None and run_idx not in selected_run_ids:
+                fast_forward_skipped_run(scenario)
+                continue
+
             scene, _ = scenario.generate()
             target_mass = float(scene.params.get('target_mass_kg', TARGET_MASS_DEFAULT))
 
