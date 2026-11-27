@@ -79,7 +79,7 @@ def run_analysis(args: argparse.Namespace) -> dict:
     if args.active_input:
         print(f" Входные данные (active):  '{args.active_input}'")
     print(f" Папка отчетов и графиков: '{args.output_dir}'")
-    print(f" Веса в ODD: Подкласс А = {args.weight_a:.2f}, Подкласс B = {weight_b:.2f}")
+    print(f" Вердикт HARA: раздельно по 1.1.A / 1.1.B и Worst-Case (справочные веса ODD: A={args.weight_a:.2f}, B={weight_b:.2f})")
     print("=" * 80)
 
     # 1. Загрузка данных

@@ -85,6 +85,17 @@ def test_config_f_and_geometry_invariants():
     assert config.FRICTION_TRIGGER_EXTENT_Y_CM == 1175.0
     assert config.DITCH_BOUNDARY_Y == 9.75
     assert config.BARRIER_FILTER_MAX_Y == 3.5
+    assert config.DITCH_S1_TRACKING_VPERP_MPS == 2.0
+    assert config.DITCH_S1_SKID_VLAT_MPS == 2.0
+    assert config.DITCH_S2_TRIP_VDEP_MPS == 14.0
+    assert config.DITCH_S2_TRIP_VLAT_MPS == 5.5
+    assert config.DITCH_S2_BOTTOM_VPERP_MPS == 12.0
+    assert config.DITCH_S3_NOSE_VPERP_MPS == 18.0
+    assert config.PID_MAX_THROTTLE == 1.0
+    assert config.SAFE_PASS_LANE_TOL_M == 0.35
+    assert config.SAFE_PASS_VY_TOL_MPS == 0.35
+    assert config.SAFE_PASS_YAW_TOL_DEG == 2.5
+    assert config.SAFE_PASS_HOLD_SEC == 1.0
 
 
 def test_canonical_map_assets_and_no_root_duplicates(project_root: Path):

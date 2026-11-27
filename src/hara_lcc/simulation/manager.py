@@ -21,9 +21,16 @@ from hara_lcc.config import (
     CRUISE_SPEED_MPS,
     DITCH_BOUNDARY_Y,
     EGO_MASS,
+    LANE_LEFT_CENTER_Y,
+    LANE_RIGHT_CENTER_Y,
     OUT_OF_BOUNDS_Y,
     OUT_OF_BOUNDS_Z,
+    PID_MAX_THROTTLE,
     RESTITUTION_E,
+    SAFE_PASS_HOLD_SEC,
+    SAFE_PASS_LANE_TOL_M,
+    SAFE_PASS_VY_TOL_MPS,
+    SAFE_PASS_YAW_TOL_DEG,
     SUBCLASS_A,
     SUBCLASS_B,
     TARGET_MASS_DEFAULT,
@@ -32,6 +39,7 @@ from hara_lcc.driver.post_impact import (
     PostImpactDriverModel,
     PostImpactState,
     create_driver_model,
+    normalize_deg,
 )
 from hara_lcc.driver.reaction import sample_reaction_and_hold_times
 from hara_lcc.severity.classifiers import (
@@ -58,6 +66,31 @@ def _get_vehicle_pid_controller_cls():
         return VehiclePIDController
     except ImportError:
         return None
+
+
+def is_ego_settled_in_target_lane(
+    subclass: str,
+    ego_lane_id: int | None,
+    start_lane_id: int | None,
+    ego_y: float,
+    ego_vy: float,
+    ego_yaw_deg: float,
+) -> bool:
+    """
+    Чистый критерий завершения перестроения Ego в целевую полосу (откалиброван по 200 frame_logs):
+    - Ego перешёл в целевую полосу (lane_id != start_lane_id);
+    - |ego_y - target_lane_center_y| <= 0.35 м (покрывает штатное перерегулирование ПИД ~0.28 м);
+    - |ego_vy| <= 0.35 м/с и |yaw_deg| <= 2.5°.
+    """
+    if ego_lane_id is None or start_lane_id is None or ego_lane_id == start_lane_id:
+        return False
+    target_center_y = LANE_LEFT_CENTER_Y if subclass == SUBCLASS_A else LANE_RIGHT_CENTER_Y
+    yaw_norm = abs(normalize_deg(ego_yaw_deg))
+    return (
+        abs(ego_y - target_center_y) <= SAFE_PASS_LANE_TOL_M
+        and abs(ego_vy) <= SAFE_PASS_VY_TOL_MPS
+        and yaw_norm <= SAFE_PASS_YAW_TOL_DEG
+    )
 
 
 class AutopilotManager:
@@ -108,6 +141,8 @@ class AutopilotManager:
         self.lane_change_triggered = False
         self.lost_control = False
         self.collision_tick = None
+        self.post_lane_change_safe_time_sec = 0.0
+        self.safe_pass_confirmed = False
 
         self.target_v0_mps = CRUISE_SPEED_MPS
         self.ego_tm_speed = self.target_v0_mps + 0.4
@@ -562,7 +597,7 @@ class AutopilotManager:
                     configure_ego_physics(self.ego_vehicle)
                     configure_target_physics(self.target_vehicle, self.target_mass)
 
-                    # Инициализация ПИД-контроллера траектории для Ego
+                    # Инициализация ПИД-контроллера траектории для Ego (max_throttle=1.0 снимает лимит CARLA 0.75)
                     pid_cls = _get_vehicle_pid_controller_cls()
                     if pid_cls is not None:
                         args_lateral = {'K_P': 1.1, 'K_I': 0.03, 'K_D': 0.15, 'dt': self.dt}
@@ -571,6 +606,7 @@ class AutopilotManager:
                             self.ego_vehicle,
                             args_lateral=args_lateral,
                             args_longitudinal=args_long,
+                            max_throttle=PID_MAX_THROTTLE,
                         )
 
                     # Датчики коллизий на ОБОИХ автомобилях (ISO 26262-3)
@@ -792,6 +828,34 @@ class AutopilotManager:
                                 self.last_steer = control.steer
                                 self.last_throttle = control.throttle
                                 self.ego_vehicle.apply_control(control)
+
+                        # Правило Safe Pass: через 1.0 с после завершения перестроения без удара
+                        # отключаем слепой режим Target, чтобы исключить догоняющие «фантомные S0»
+                        if not self.safe_pass_confirmed:
+                            ego_yaw_deg = ego_snap.get_transform().rotation.yaw
+                            if is_ego_settled_in_target_lane(
+                                subclass=self.subclass,
+                                ego_lane_id=ego_wp.lane_id,
+                                start_lane_id=self.start_lane_id,
+                                ego_y=ego_loc.y,
+                                ego_vy=ego_v.y,
+                                ego_yaw_deg=ego_yaw_deg,
+                            ):
+                                self.post_lane_change_safe_time_sec += self.dt
+                                if self.post_lane_change_safe_time_sec >= SAFE_PASS_HOLD_SEC - 1e-9:
+                                    self.safe_pass_confirmed = True
+                                    if self.tm is not None and self.target_vehicle is not None:
+                                        try:
+                                            self.tm.ignore_vehicles_percentage(self.target_vehicle, 0)
+                                        except Exception:
+                                            pass
+                                    print(
+                                        f"\n[{snapshot.frame}] ->> SAFE PASS ПОДТВЕРЖДЁН: "
+                                        f"Ego завершил перестроение без столкновения (+{SAFE_PASS_HOLD_SEC:.1f} с); "
+                                        f"слепой режим Target отключён (ignore_vehicles=0%)."
+                                    )
+                            else:
+                                self.post_lane_change_safe_time_sec = 0.0
 
                     else:
                         # ПОСЛЕ УДАРА: единый пост-ударный контроллер для Ego и Target

@@ -105,7 +105,7 @@ def load_simulation_results(input_path: str) -> list[dict]:
                 omega_z = to_float(row.get('departure_yaw_rate_deg_s'))
                 ditch_actor = row.get('ditch_departure_actor', 'None')
                 if ditch_actor not in ('None', '') and v_dep is not None and v_dep > 0:
-                    ditch_sev_int, _ = classify_ditch_boundary(
+                    ditch_sev_int, ditch_mech = classify_ditch_boundary(
                         v_dep=v_dep,
                         v_perp_road=v_perp,
                         v_lat_car=v_lat,
@@ -116,6 +116,7 @@ def load_simulation_results(input_path: str) -> list[dict]:
                 else:
                     raw_d = row.get('sev_ditch', 'S0').strip().upper()
                     sev_ditch = raw_d if raw_d in SEVERITY_CLASSES else 'S0'
+                    ditch_mech = row.get('ditch_mechanism', '')
 
                 # Итоговая тяжесть прогона как наихудший класс из трех компонентов
                 final_rank = max(SEVERITY_RANK[sev_side], SEVERITY_RANK[sev_barrier], SEVERITY_RANK[sev_ditch])
@@ -143,7 +144,7 @@ def load_simulation_results(input_path: str) -> list[dict]:
                     'vehicle_lat_skid_mps': v_lat,
                     'sideslip_angle_deg': beta,
                     'departure_yaw_rate_deg_s': omega_z,
-                    'ditch_mechanism': row.get('ditch_mechanism', ''),
+                    'ditch_mechanism': ditch_mech,
                     'sev_ditch': sev_ditch,
                     'severity': severity,
                     'scenario_outcome': row.get('scenario_outcome', ''),

@@ -17,6 +17,7 @@ from hara_lcc.config import (
     BARRIER_SIDESWIPE_S2_MPS,
     BARRIER_SIDESWIPE_S3_MPS,
     DITCH_NON_TRACKING_BETA_DEG,
+    DITCH_S1_SKID_VLAT_MPS,
     DITCH_S1_TRACKING_VPERP_MPS,
     DITCH_S2_BOTTOM_VPERP_MPS,
     DITCH_S2_SKID_BETA_DEG,
@@ -181,15 +182,20 @@ def classify_ditch_boundary(
     )
     is_s3_nose = (v_dep > DITCH_VDEP_TRACKING_MIN_MPS) and (v_perp_road is not None and v_perp_road > DITCH_S3_NOSE_VPERP_MPS)
 
-    # S2: Тяжёлые травмы (MAIS 3-6 > 10%, инициация soil-trip Cooperrider V_lat > 5.5 м/с при beta >= 15°,
-    # выраженный non-tracking срыв NCHRP 665 beta >= 20° или удар о дно кювета V_perp > 8.0 м/с)
-    is_s2_trip = (v_dep > DITCH_S2_TRIP_VDEP_MPS) and is_non_tracking and (v_lat_car is not None and v_lat_car > DITCH_S2_TRIP_VLAT_MPS)
+    # S2: Тяжёлые травмы (MAIS 3-6 > 10%):
+    # - чистый порог soil-trip Cooperrider (SAE 900366 / 980022): V_dep > 14.0 м/с и V_lat > 5.5 м/с;
+    # - выраженный non-tracking срыв NCHRP 665: V_dep > 11.0 м/с и beta >= 20°;
+    # - выход за предел проходимости кювета AASHTO RDG Fig. 3-7 (11.34 м/с): V_dep > 8.0 м/с и V_perp > 12.0 м/с.
+    is_s2_trip = (v_dep > DITCH_S2_TRIP_VDEP_MPS) and (v_lat_car is not None and v_lat_car > DITCH_S2_TRIP_VLAT_MPS)
     is_s2_skid = (v_dep > DITCH_S2_SKID_VDEP_MPS) and (beta is not None and beta >= DITCH_S2_SKID_BETA_DEG)
     is_s2_bottom = (v_dep > DITCH_VDEP_TRACKING_MIN_MPS) and (v_perp_road is not None and v_perp_road > DITCH_S2_BOTTOM_VPERP_MPS)
 
-    # S1: Лёгкие и средние травмы (Alberta RDG Table HA.4 SI=1.8 / FHWA-HRT-21-045: проходимый съезд или занос beta >= 15°)
+    # S1: Лёгкие и средние травмы (Alberta RDG Table HA.4 SI=1.8 / FHWA-HRT-21-045):
+    # проходимый съезд V_perp > 2.0 м/с, занос beta >= 15° или боковое скольжение V_lat > 2.0 м/с (строгое вложение S2 => S1)
     is_s1_tracking = (v_dep > DITCH_VDEP_TRACKING_MIN_MPS and (v_perp_road is not None and v_perp_road > DITCH_S1_TRACKING_VPERP_MPS))
-    is_s1_skid = is_non_tracking
+    is_s1_skid = is_non_tracking or (
+        v_dep > DITCH_VDEP_TRACKING_MIN_MPS and (v_lat_car is not None and v_lat_car > DITCH_S1_SKID_VLAT_MPS)
+    )
 
     if is_s3_skid or is_s3_nose:
         mechanism = 'High-Speed Soil-Trip Rollover' if is_s3_skid else 'Severe Ditch Nose-In Impact'
@@ -224,7 +230,7 @@ def select_worst_ditch_metrics(ditch_metrics_by_actor: dict) -> tuple:
 
     for actor, data in ditch_metrics_by_actor.items():
         sev = data['actor_sev']
-        hazard_score = max(data['v_lat_car'] / DITCH_S2_TRIP_VLAT_MPS, data['v_perp_road'] / DITCH_S3_NOSE_VPERP_MPS)
+        hazard_score = max(data['v_lat_car'] / DITCH_S2_TRIP_VLAT_MPS, data['v_perp_road'] / DITCH_S2_BOTTOM_VPERP_MPS)
         cand_tuple = (sev, hazard_score, data['v_dep'])
         if cand_tuple > worst_tuple:
             worst_tuple = cand_tuple

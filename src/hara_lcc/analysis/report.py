@@ -31,7 +31,7 @@ from hara_lcc.severity.iso26262 import (
 
 DEFAULT_REPORT_TEMPLATE = r"""# ОТЧЕТ ПО АНАЛИЗУ ОПАСНОСТЕЙ И ОЦЕНКЕ РИСКОВ (HARA)
 ## Функция: Пассивный контроль слепых зон при смене полосы (Lane Change Control, LCC / BSD — без вмешательства в управление)
-### Стандарты: **ISO 26262-3:2018** (Clause 6, Annex B), **SAE J2980:2023** (5.2.3, Annex B)
+### Стандарты: **ISO 26262-3:2018** (Clause 6, Annex B), **SAE J2980:2023** (5.2.1.5(g), 5.2.2.2, 5.2.3, Appendix B)
 
 ---
 
@@ -51,28 +51,27 @@ DEFAULT_REPORT_TEMPLATE = r"""# ОТЧЕТ ПО АНАЛИЗУ ОПАСНОСТ�
 | **Профиль кювета (Подкласс B)** | Обочина $2.25$ м (консерват. отн. ГОСТ $3.0\text{–}3.5$ м), откос 1:4, $Z = -1.20$ м | Водоотводный кювет по СП 34.13330.2021 п. 7.27 / AASHTO RDG; граничные условия $Y = 9.75$ м (оба подкласса) |
 | **Ограждение (Подкласс А)** | Жёсткое вертикальное ограждение $0.80$ м ($Y \le 0.0$ м) | Вертикальная жёсткая стенка (ГОСТ 33128-2014), учёт проекции скорости строго внутрь барьера |
 | **Сцепление и тормоза (`Config F`)** | `FrictionScale`: `1.05` (асфальт, ~`0.81–0.86 g`), `0.57` (обочина/кювет $Y \ge 7.50$ м до `32 м`, ~`0.46–0.48 g`); EBD `3800/2050 Н·м` (`Ego`) и `1.00/0.54·m` (`Target`), `use_sweep_wheel_collision = True` | Пропорциональный EBD (~65/35%), sweep-коллайдеры колес, инвариантное замедление `Target` и сохранение управляемости без оракулов `loc_y` (FMVSS 135 / SAE 830612) |
-| **Модель реакции и удержания** | $T_{react} \in [0.65, 1.60]$ с (мед. $1.05$ с), $T_{hold} \in [0.20, 0.35]$ с | Усечённо-логнормальная задержка (Green 2000; Taoka 1989; SAE J2980:2023 5.2.3.2(d)) |
+| **Модель реакции и удержания** | $T_{react} \in [0.65, 1.60]$ с (мед. $1.05$ с), $T_{hold} \in [0.20, 0.35]$ с ($T_{hold} \le T_{react}$, внутри $T_{react}$) | Усечённо-логнормальная задержка (Green 2000; Taoka 1989; SAE J2980:2023 5.2.3.2(d)) |
 | **Шаг и горизонт симуляции** | $dt = 0.01$ с (100 Гц, Substepping 100 Гц), горизонт $45$ с ($4500$ тиков) | Полный разгон `Impala 3490 кг` до $100\text{ км/ч}$ и завершение пост-ударной фазы без обрезки |
 
-### 1.1. Многоуровневые вердикты по стандарту ISO 26262-3 / SAE J2980:2023:
-1. **Вердикт для Подкласса А (Ограждение слева, $n_A = {crashes_a}$):** **Класс {assigned_class_a}**
+### 1.1. Итоговые вердикты HARA по раздельным строкам `1.1.A` / `1.1.B` и `Worst-Case` (ISO 26262-3 / SAE J2980:2023 §5.2.1.5(g), §5.2.2.2 Note 1):
+1. **Строка HARA `1.1.A` — Подкласс А (Ограждение слева, $n_A = {crashes_a}$):** **Класс {assigned_class_a}**
    * *Обоснование:* {decision_reason_a}
-2. **Вердикт для Подкласса B (Кювет справа, $n_B = {crashes_b}$):** **Класс {assigned_class_b}**
+   * *Точечная оценка и 95% ДИ Клоппера–Пирсона (информационно, SAE J2980 Appendix B §B.1):* $P_A(\ge S2 \mid \text{ДТП}) = {p_ge_s2_a_pct}$ (95% ДИ: $[{ci_ge_s2_a_low}, {ci_ge_s2_a_high}]$).
+2. **Строка HARA `1.1.B` — Подкласс B (Кювет справа, $n_B = {crashes_b}$):** **Класс {assigned_class_b}**
    * *Обоснование:* {decision_reason_b}
-3. **Консервативный вердикт по сценарию (Worst-Case Subclass):** **Класс {s_worst}**
+   * *Точечная оценка и 95% ДИ Клоппера–Пирсона (информационно, SAE J2980 Appendix B §B.1):* $P_B(\ge S2 \mid \text{ДТП}) = {p_ge_s2_b_pct}$ (95% ДИ: $[{ci_ge_s2_b_low}, {ci_ge_s2_b_high}]$).
+3. **Главный консервативный итог HARA (`Worst-Case Subclass`):** **Класс {s_worst}**
    * *Определение:* $S_{worst} = \max(S_A, S_B) = \max({assigned_class_a}, {assigned_class_b}) = {s_worst_bold}$.
-   * *Область применения:* Используется при раздельном ведении подклассов дорожных условий в таблице HARA (где веса ${weight_a}$ и ${weight_b}$ уже учтены в классе Экспозиции $E$).
-4. **Взвешенный вердикт по объединенному ODD (Пул ODD, $N_{crash} = {total_crashes}$):** **Класс {assigned_class_odd}**
-   * *Определение:* По условным взвешенным вероятностям $P_{ODD}(S_i \mid \text{ДТП}) = {weight_a} \cdot P_A(S_i \mid \text{ДТП}) + {weight_b} \cdot P_B(S_i \mid \text{ДТП})$.
-   * *Обоснование:* {decision_reason_odd}
+   * *Область применения:* В соответствии с **SAE J2980:2023 §5.2.1.5(g)** и **§5.2.2.2 Note 1** различные дорожные профили (жёсткое ограждение `1.1.A` и водоотводный кювет `1.1.B`) ведутся в HARA **раздельными строками** без разбавляющего усреднения тяжести весами ODD (веса ${weight_a}$ и ${weight_b}$ учитываются в экспозиции $E$). При сведении в единый консервативный вердикт сценария принимается $S_{worst} = {s_worst_bold}$. *(Справочный расчёт взвешенного пула ODD приведён в отдельной информационной строке таблицы Раздела 2 и не используется для назначения класса тяжести HARA.)*
 
-### 1.2. Разрешение парадокса весов ODD (Double Weighting Paradox)
+### 1.2. Методологическое обоснование раздельных строк HARA (исключение Double Weighting Paradox)
 {odd_paradox_content}
 
 ### 1.3. Статистика реализации кинематического конфликта в слепой зоне (Pre-Crash Conflict Funnel)
 {conflict_funnel_content}
 
-### 1.4. Детальный анализ критических исходов S3 и доверительные интервалы
+### 1.4. Статистическая неопределённость: 95% ДИ Клоппера–Пирсона для $P(\ge S2 \mid \text{ДТП})$ и анализ исходов $S3$
 {s3_analysis_content}
 
 ### 1.5. Количественная оценка управляемости (Controllability, C) по кампании `active`
@@ -119,11 +118,11 @@ DEFAULT_REPORT_TEMPLATE = r"""# ОТЧЕТ ПО АНАЛИЗУ ОПАСНОСТ�
 ## 6. ОБНОВЛЕННЫЕ ИНЖЕНЕРНЫЕ ГРАФИКИ
 
 В директории `results/plots/` сформированы 5 публикационных графиков (300 DPI):
-1. `01_severity_distribution.png` — Фактическое распределение исходов S0–S3 среди состоявшихся ДТП ($N_{crash} = {total_crashes}$).
-2. `02_cumulative_iso_decision.png` — Воронка кумулятивного правила >10% для состоявшихся ДТП с серой зоной отсечки и нормативным порогом 10.0%.
-3. `03_ditch_phase_portrait.png` — Двухпанельный фазовый портрет кювета: Механизм 1 (Soil-Trip) и Механизм 2 (Nose-In Impact) по всем сходам в кювет (SubB: {ditch_departures_b} + перекрёстные SubA: {ditch_departures_a_cross}, всего $n = {ditch_departures_total}$) с разметкой #run_id.
-4. `04_subclass_a_dv_cascade.png` — Двухпанельный каскад скоростей удара в Подклассе А строго по состоявшимся ДТП ($n = {crashes_a}$) без пустых пропусков (ТС–ТС vs Ограждение).
-5. `05_kinematics_vs_severity_boxplots.png` — Дашборд эскалации тяжести при ДТП (Панель А, $N_{crash} = {total_crashes}$) и воронка реализации конфликта в слепой зоне с распределением участников (Панель Б, $N_{total} = {total_runs}$).
+1. `01_severity_distribution.png` — Фактическое распределение исходов S0–S3 среди состоявшихся ДТП ($N_{crash} = {total_crashes}$) с информационными 95% ДИ $P(\ge S2 \mid \text{ДТП})$ для `1.1.A` и `1.1.B`.
+2. `02_cumulative_iso_decision.png` — Воронка кумулятивного правила >10% для раздельных строк HARA `1.1.A` и `1.1.B` с усами 95% ДИ Клоппера–Пирсона, серой зоной отсечки и нормативным порогом 10.0%.
+3. `03_ditch_phase_portrait.png` — Двухпанельный фазовый портрет кювета: Механизм 1 (чистый Cooperrider $V_{lat} > 5.5\text{ м/с}$) и Механизм 2 (удары о дно/откос $V_\perp > 12 / 18\text{ м/с}$) по всем сходам в кювет (SubB: {ditch_departures_b} + перекрёстные SubA: {ditch_departures_a_cross}, всего $n = {ditch_departures_total}$) с разметкой #run_id.
+4. `04_subclass_a_dv_cascade.png` — Двухпанельный каскад скоростей удара в Подклассе А строго по состоявшимся ДТП ($n = {crashes_a}$) с адаптивной разметкой для малых и больших выборок (ТС–ТС vs Ограждение).
+5. `05_kinematics_vs_severity_boxplots.png` — Дашборд эскалации тяжести при ДТП (Панель А, справочный взвешенный профиль ODD, $N_{crash} = {total_crashes}$) и воронка реализации конфликта в слепой зоне с распределением участников (Панель Б, $N_{total} = {total_runs}$).
 
 ---
 *Отчет сформирован автоматически модулем `analyze_results.py` на основе физического моделирования CARLA / Scenic.*
@@ -218,74 +217,94 @@ def _build_conflict_funnel_content(analysis_a: dict, analysis_b: dict) -> str:
     return "\n".join(lines)
 
 
+def _get_cum_ci_95(analysis: dict, key: str) -> tuple[float, float]:
+    """Безопасное извлечение 95% ДИ Клоппера–Пирсона для кумулятивной доли ('S3', '>=S2', '>=S1')."""
+    cum_ci = analysis.get('cum_ci_95')
+    if isinstance(cum_ci, dict) and key in cum_ci:
+        return cum_ci[key]
+    n = int(analysis.get('total_crashes', 0))
+    counts = analysis.get('counts', {})
+    if key == 'S3':
+        k = int(counts.get('S3', 0))
+    elif key == '>=S2':
+        k = int(counts.get('S3', 0) + counts.get('S2', 0))
+    else:
+        k = int(counts.get('S3', 0) + counts.get('S2', 0) + counts.get('S1', 0))
+    return calc_clopper_pearson_ci(k, n, confidence=0.95)
+
+
 def _build_severity_table(analysis_a: dict, analysis_b: dict, analysis_odd: dict, s_worst: str) -> str:
     """Построение сводной таблицы распределения и кумулятивных вероятностей (Раздел 2)."""
     weights = analysis_odd.get('weights', {'A': 0.20, 'B': 0.80})
     w_a = weights.get('A', 0.20)
     w_b = weights.get('B', 0.80)
 
+    ci2_a_lo, ci2_a_hi = _get_cum_ci_95(analysis_a, '>=S2')
+    ci2_b_lo, ci2_b_hi = _get_cum_ci_95(analysis_b, '>=S2')
+
     lines = [
-        r"| Дорожный профиль ODD | Вес в ODD | N_total (Конфликт %) | N_crash | S0 (Удар без травм, AIS 0) | S1 (Легкие) | S2 (Тяжелые) | S3 (Фатальные) | P(S3 \| ДТП) | P(≥S2 \| ДТП) | P(≥S1 \| ДТП) | Вердикт ISO 26262 |",
-        "| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |",
+        r"| Дорожный профиль ODD | Вес в ODD | N_total (Конфликт %) | N_crash | S0 (Удар без травм, AIS 0) | S1 (Легкие) | S2 (Тяжелые) | S3 (Фатальные) | P(S3 \| ДТП) | P(≥S2 \| ДТП) | 95% ДИ P(≥S2 \| ДТП) | P(≥S1 \| ДТП) | Вердикт ISO 26262 |",
+        "| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |",
     ]
 
-    # Строка Подкласса А
+    # Строка Подкласса А (1.1.A)
     c_a = analysis_a['counts']
     p_a = analysis_a['percentages']
     cp_a = analysis_a['cum_percentages']
     n_tot_a_str = f"{analysis_a['total_runs']} ({analysis_a['conflict_rate']:.1f}%)"
     lines.append(
-        f"| **Подкласс А (Ограждение)** | {w_a:.2f} | {n_tot_a_str} | {analysis_a['total_crashes']} | "
+        f"| **1.1.A — Подкласс А (Ограждение)** | {w_a:.2f} | {n_tot_a_str} | {analysis_a['total_crashes']} | "
         f"{c_a.get('S0',0)} ({p_a.get('S0',0.0):.1f}%) | "
         f"{c_a.get('S1',0)} ({p_a.get('S1',0.0):.1f}%) | "
         f"{c_a.get('S2',0)} ({p_a.get('S2',0.0):.1f}%) | "
         f"{c_a.get('S3',0)} ({p_a.get('S3',0.0):.1f}%) | "
-        f"{format_iso_pct(cp_a['S3'])} | {format_iso_pct(cp_a['>=S2'])} | {format_iso_pct(cp_a['>=S1'])} | **{analysis_a['assigned_class']}** |"
+        f"{format_iso_pct(cp_a['S3'])} | {format_iso_pct(cp_a['>=S2'])} | [{ci2_a_lo*100:.2f}%, {ci2_a_hi*100:.2f}%] | {format_iso_pct(cp_a['>=S1'])} | **{analysis_a['assigned_class']}** |"
     )
 
-    # Строка Подкласса B
+    # Строка Подкласса B (1.1.B)
     c_b = analysis_b['counts']
     p_b = analysis_b['percentages']
     cp_b = analysis_b['cum_percentages']
     n_tot_b_str = f"{analysis_b['total_runs']} ({analysis_b['conflict_rate']:.1f}%)"
     lines.append(
-        f"| **Подкласс B (Кювет)** | {w_b:.2f} | {n_tot_b_str} | {analysis_b['total_crashes']} | "
+        f"| **1.1.B — Подкласс B (Кювет)** | {w_b:.2f} | {n_tot_b_str} | {analysis_b['total_crashes']} | "
         f"{c_b.get('S0',0)} ({p_b.get('S0',0.0):.1f}%) | "
         f"{c_b.get('S1',0)} ({p_b.get('S1',0.0):.1f}%) | "
         f"{c_b.get('S2',0)} ({p_b.get('S2',0.0):.1f}%) | "
         f"{c_b.get('S3',0)} ({p_b.get('S3',0.0):.1f}%) | "
-        f"**{format_iso_pct(cp_b['S3'])}** | **{format_iso_pct(cp_b['>=S2'])}** | {format_iso_pct(cp_b['>=S1'])} | **{analysis_b['assigned_class']}** |"
+        f"**{format_iso_pct(cp_b['S3'])}** | **{format_iso_pct(cp_b['>=S2'])}** | [{ci2_b_lo*100:.2f}%, {ci2_b_hi*100:.2f}%] | {format_iso_pct(cp_b['>=S1'])} | **{analysis_b['assigned_class']}** |"
     )
 
-    # Строка Взвешенного ODD
-    p_odd = analysis_odd['percentages']
-    cp_odd = analysis_odd['cum_percentages']
     tot_runs = analysis_odd['total_runs']
     tot_crashes = analysis_odd['total_crashes']
     p_conf_odd = (tot_crashes / max(1, tot_runs)) * 100.0
     n_tot_odd_str = f"{tot_runs} ({p_conf_odd:.1f}%)"
+
+    # Главная итоговая строка Worst-Case
     lines.append(
-        f"| **ВЗВЕШЕННЫЙ ODD** | **1.00** | **{n_tot_odd_str}** | **{tot_crashes}** | "
-        f"{p_odd.get('S0',0.0):.1f}% | "
-        f"{p_odd.get('S1',0.0):.1f}% | "
-        f"{p_odd.get('S2',0.0):.1f}% | "
-        f"{p_odd.get('S3',0.0):.1f}% | "
-        f"{format_iso_pct(cp_odd['S3'])} | **{format_iso_pct(cp_odd['>=S2'])}** | {format_iso_pct(cp_odd['>=S1'])} | **{analysis_odd['assigned_class']}** |"
+        f"| **WORST-CASE SUBCLASS (главный итог HARA)** | — | **{n_tot_odd_str}** | **{tot_crashes}** | "
+        f"— | — | — | — | "
+        f"— | — | — | — | **{s_worst}** |"
     )
 
-    # Итоговая строка Worst-Case
+    # Справочная строка Взвешенного ODD (не используется для вердикта HARA)
+    p_odd = analysis_odd['percentages']
+    cp_odd = analysis_odd['cum_percentages']
     lines.append(
-        f"| **WORST-CASE SUBCLASS** | - | **{n_tot_odd_str}** | **{tot_crashes}** | "
-        f"- | - | - | - | "
-        f"- | - | - | **{s_worst}** |"
+        f"| *Взвешенный ODD (справочно; для HARA — 1.1.A и 1.1.B)* | *1.00* | *{n_tot_odd_str}* | *{tot_crashes}* | "
+        f"*{p_odd.get('S0',0.0):.1f}%* | "
+        f"*{p_odd.get('S1',0.0):.1f}%* | "
+        f"*{p_odd.get('S2',0.0):.1f}%* | "
+        f"*{p_odd.get('S3',0.0):.1f}%* | "
+        f"*{format_iso_pct(cp_odd['S3'])}* | *{format_iso_pct(cp_odd['>=S2'])}* | *—* | *{format_iso_pct(cp_odd['>=S1'])}* | *{analysis_odd['assigned_class']} (справ.)* |"
     )
 
     return "\n".join(lines)
 
 
 def _build_iso_steps_content(analysis_a: dict, analysis_b: dict, analysis_odd: dict) -> str:
-    """Построение компактной сводной аналитики применения правила >10% (Раздел 3) для любого класса S0–S3."""
-    def format_subclass_summary(name: str, an: dict, ci_str: str = "") -> list[str]:
+    """Построение компактной сводной аналитики применения правила >10% (Раздел 3) для раздельных строк 1.1.A и 1.1.B."""
+    def format_subclass_summary(name: str, an: dict, ci_s3_str: str = "", ci_s2_str: str = "") -> list[str]:
         cp = an['cum_percentages']
         p3 = cp.get('S3', 0.0)
         p2 = cp.get('>=S2', 0.0)
@@ -305,21 +324,21 @@ def _build_iso_steps_content(analysis_a: dict, analysis_b: dict, analysis_odd: d
 
         if assigned == 'S3':
             step_lines.append(
-                f"  * Финальная отсечка на **Шаге 1**: $P(S3 \\mid \\text{{ДТП}}) = {p3_str}{ci_str} > 10.0\\%$ "
-                f"— порог превышен на **{format_iso_margin(p3 - 10.0)}**."
+                f"  * Финальная отсечка на **Шаге 1**: $P(S3 \\mid \\text{{ДТП}}) = {p3_str}${ci_s3_str} $> 10.0\\%$ "
+                f"— порог превышен на **{format_iso_margin(p3 - 10.0)}** ($P(\\ge S2 \\mid \\text{{ДТП}}) = {p2_str}${ci_s2_str})."
             )
         elif assigned == 'S2':
             step_lines.append(
-                f"  * $P(S3 \\mid \\text{{ДТП}}) = {p3_str}{ci_str} \\le 10.0\\%$ — нормативный порог фатальных травм не достигнут."
+                f"  * $P(S3 \\mid \\text{{ДТП}}) = {p3_str}${ci_s3_str} $\\le 10.0\\%$ — нормативный порог фатальных травм не достигнут."
             )
             step_lines.append(
-                f"  * Финальная отсечка на **Шаге 2**: $P(\\ge S2 \\mid \\text{{ДТП}}) = {p2_str} > 10.0\\%$ "
+                f"  * Финальная отсечка на **Шаге 2**: $P(\\ge S2 \\mid \\text{{ДТП}}) = {p2_str}${ci_s2_str} $> 10.0\\%$ "
                 f"— порог преодолен с запасом **{format_iso_margin(p2 - 10.0)}**."
             )
         elif assigned == 'S1':
             step_lines.append(
-                f"  * $P(S3 \\mid \\text{{ДТП}}) = {p3_str}{ci_str} \\le 10.0\\%$, "
-                f"$P(\\ge S2 \\mid \\text{{ДТП}}) = {p2_str} \\le 10.0\\%$ — пороги S3 и S2 не достигнуты."
+                f"  * $P(S3 \\mid \\text{{ДТП}}) = {p3_str}${ci_s3_str} $\\le 10.0\\%$, "
+                f"$P(\\ge S2 \\mid \\text{{ДТП}}) = {p2_str}${ci_s2_str} $\\le 10.0\\%$ — пороги S3 и S2 не достигнуты."
             )
             step_lines.append(
                 f"  * Финальная отсечка на **Шаге 3**: $P(\\ge S1 \\mid \\text{{ДТП}}) = {p1_str} > 10.0\\%$ "
@@ -327,24 +346,36 @@ def _build_iso_steps_content(analysis_a: dict, analysis_b: dict, analysis_odd: d
             )
         else:
             step_lines.append(
-                f"  * Кумулятивные вероятности $P(S3) = {p3_str}{ci_str}$, $P(\\ge S2) = {p2_str}$ и "
+                f"  * Кумулятивные вероятности $P(S3) = {p3_str}${ci_s3_str}, $P(\\ge S2) = {p2_str}${ci_s2_str} и "
                 f"$P(\\ge S1 \\mid \\text{{ДТП}}) = {p1_str} \\le 10.0\\%$ — ни один порог вреда не превышен (**Шаг 4**)."
             )
 
         step_lines.append(f"  * **Итоговый вердикт:** **Класс {assigned}**.")
         return step_lines
 
-    k_s3_b = analysis_b['counts'].get('S3', 0)
-    n_b = analysis_b['total_crashes']
-    ci_low_b, ci_high_b = calc_clopper_pearson_ci(k_s3_b, n_b)
-    ci_b_str = f" (95% CI: [{ci_low_b*100:.2f}%, {ci_high_b*100:.2f}%])"
+    ci3_a_lo, ci3_a_hi = _get_cum_ci_95(analysis_a, 'S3')
+    ci2_a_lo, ci2_a_hi = _get_cum_ci_95(analysis_a, '>=S2')
+    ci3_b_lo, ci3_b_hi = _get_cum_ci_95(analysis_b, 'S3')
+    ci2_b_lo, ci2_b_hi = _get_cum_ci_95(analysis_b, '>=S2')
+
+    ci3_a_str = f" (95% ДИ: [{ci3_a_lo*100:.2f}%, {ci3_a_hi*100:.2f}%])"
+    ci2_a_str = f" (95% ДИ: [{ci2_a_lo*100:.2f}%, {ci2_a_hi*100:.2f}%])"
+    ci3_b_str = f" (95% ДИ: [{ci3_b_lo*100:.2f}%, {ci3_b_hi*100:.2f}%])"
+    ci2_b_str = f" (95% ДИ: [{ci2_b_lo*100:.2f}%, {ci2_b_hi*100:.2f}%])"
 
     lines = []
-    lines.extend(format_subclass_summary("Подкласс А (Ограждение слева)", analysis_a))
+    lines.extend(format_subclass_summary("Строка HARA 1.1.A — Подкласс А (Ограждение слева)", analysis_a, ci3_a_str, ci2_a_str))
     lines.append("")
-    lines.extend(format_subclass_summary("Подкласс B (Кювет справа)", analysis_b, ci_b_str))
+    lines.extend(format_subclass_summary("Строка HARA 1.1.B — Подкласс B (Кювет справа)", analysis_b, ci3_b_str, ci2_b_str))
     lines.append("")
-    lines.extend(format_subclass_summary(f"Взвешенный ODD (Пул ODD, $N_{{crash}} = {analysis_odd['total_crashes']}$)", analysis_odd))
+    lines.append(
+        f"* *Справочно (не используется для назначения класса тяжести HARA):* "
+        f"взвешенный пул ODD ($N_{{crash}} = {analysis_odd['total_crashes']}$) даёт "
+        f"$P_{{ODD}}(S3 \\mid \\text{{ДТП}}) = {format_iso_pct(analysis_odd['cum_percentages']['S3']).replace('%', chr(92) + '%')}$, "
+        f"$P_{{ODD}}(\\ge S2 \\mid \\text{{ДТП}}) = {format_iso_pct(analysis_odd['cum_percentages']['>=S2']).replace('%', chr(92) + '%')}$ "
+        f"(формально **{analysis_odd['assigned_class']}**); по SAE J2980:2023 §5.2.1.5(g) и §5.2.2.2 Note 1 "
+        f"усреднение между разнородными дорожными условиями не допускается."
+    )
 
     return "\n".join(lines)
 
@@ -379,7 +410,7 @@ def _build_kinematics_table(records: list[dict]) -> str:
 
 
 def _build_odd_paradox_content(analysis_a: dict, analysis_b: dict, analysis_odd: dict, s_worst: str) -> str:
-    """Формирование вывода о соотношении вердиктов Worst-Case и взвешенного ODD (Раздел 1.2)."""
+    """Формирование обоснования раздельных строк HARA 1.1.A / 1.1.B и Worst-Case (Раздел 1.2)."""
     p2_b = analysis_b['cum_percentages']['>=S2']
     p2_a = analysis_a['cum_percentages']['>=S2']
     s_a = analysis_a['assigned_class']
@@ -390,30 +421,42 @@ def _build_odd_paradox_content(analysis_a: dict, analysis_b: dict, analysis_odd:
     w_b = weights.get('B', 0.80)
 
     if s_worst == s_odd:
-        text = (
-            f"Оба метода агрегации дают согласованный итоговый класс тяжести ($S_{{worst}} = S_{{ODD}} = {s_worst}$): "
-            f"в Подклассе А (ограждение) получено **$S_A = {s_a}$** ($P(\\ge S2 \\mid \\text{{ДТП}}) = {p2_a:.1f}\\%$), "
-            f"в Подклассе B (кювет) — **$S_B = {s_b}$** ($P(\\ge S2 \\mid \\text{{ДТП}}) = {p2_b:.1f}\\%$). "
-            f"В соответствии с ISO 26262-3 (Clause 6) в рабочую таблицу HARA подклассы заносятся раздельными строками "
-            f"(`1.1.A` и `1.1.B`), поскольку дорожные веса $W_A = {w_a:.2f}$ и $W_B = {w_b:.2f}$ уже учитываются в экспозиции $E$."
+        diff_note = (
+            f"Для текущей выборки справочный взвешенный расчёт $0.20\\cdot A + 0.80\\cdot B$ численно совпадает с "
+            f"$S_{{worst}}$ ($S_{{ODD,\\text{{справ.}}}} = {s_odd}$), однако не используется как критерий назначения."
         )
     else:
-        text = (
-            f"Консервативный вердикт по наихудшему подклассу ($S_{{worst}} = \\max({s_a}, {s_b}) = {s_worst}$) расходится "
-            f"со взвешенным вердиктом объединенного пула ($S_{{ODD}} = {s_odd}$ при весах $W_A = {w_a:.2f}$, $W_B = {w_b:.2f}$; "
-            f"$P_A(\\ge S2) = {p2_a:.1f}\\%$, $P_B(\\ge S2) = {p2_b:.1f}\\%$). Во избежание двойного взвешивания вероятностей ODD "
-            f"(Double Weighting Paradox) стандарт ISO 26262-3 (Clause 6) предписывает заносить подклассы `1.1.A` и `1.1.B` раздельными строками HARA "
-            f"или принимать консервативный верхний класс $S_{{worst}} = {s_worst}$."
+        diff_note = (
+            f"Справочный взвешенный расчёт $0.20\\cdot A + 0.80\\cdot B$ даёт заниженный класс $S_{{ODD,\\text{{справ.}}}} = {s_odd}$ "
+            f"относительно $S_{{worst}} = {s_worst}$, что наглядно иллюстрирует эффект разбавления тяжести при смешивании подклассов."
         )
-    return text
+
+    return (
+        f"В соответствии с **SAE J2980:2023 §5.2.1.5(g)** и **§5.2.2.2 Note 1** (а также ISO 26262-3 Clause 6) "
+        f"различные дорожные профили — жёсткое ограждение (`1.1.A`: **$S_A = {s_a}$**, $P_A(\\ge S2 \\mid \\text{{ДТП}}) = {p2_a:.1f}\\%$) "
+        f"и водоотводный кювет (`1.1.B`: **$S_B = {s_b}$**, $P_B(\\ge S2 \\mid \\text{{ДТП}}) = {p2_b:.1f}\\%$) — "
+        f"заносятся в таблицу HARA **раздельными строками**, поскольку доли дорожной инфраструктуры ($W_A = {w_a:.2f}$, $W_B = {w_b:.2f}$) "
+        f"уже учитываются в параметре экспозиции $E$ (исключение Double Weighting Paradox и разбавления тяжести). "
+        f"Главным сводным итогом HARA является консервативный класс наихудшего подкласса "
+        f"**$S_{{worst}} = \\max({s_a}, {s_b}) = {s_worst}$**. {diff_note}"
+    )
 
 
-def _build_s3_analysis_content(analysis_b: dict, records_b: list[dict]) -> str:
-    """Формирование детального физико-статистического разбора исходов S3 и доверительных интервалов (Раздел 1.4)."""
+def _build_s3_analysis_content(
+    analysis_b: dict,
+    records_b: list[dict],
+    analysis_a: dict | None = None,
+) -> str:
+    """Формирование анализа 95% ДИ Клоппера–Пирсона для P(>=S2 | ДТП) (SubA/SubB) и P(S3 | ДТП) (Раздел 1.4)."""
     k_s3 = analysis_b['counts'].get('S3', 0)
     n_crashes = analysis_b['total_crashes']
     p_s3 = (k_s3 / max(1, n_crashes)) * 100.0
-    ci_low, ci_high = calc_clopper_pearson_ci(k_s3, n_crashes, confidence=0.95)
+    ci_low, ci_high = _get_cum_ci_95(analysis_b, 'S3')
+
+    k_ge_s2_b = int(analysis_b['counts'].get('S2', 0) + analysis_b['counts'].get('S3', 0))
+    p_ge_s2_b = (k_ge_s2_b / max(1, n_crashes)) * 100.0
+    ci2_b_lo, ci2_b_hi = _get_cum_ci_95(analysis_b, '>=S2')
+
     s3_runs = [r for r in records_b if is_crash_run(r) and r.get('severity') == 'S3']
 
     rollover_cnt = sum(1 for r in s3_runs if 'rollover' in str(r.get('ditch_mechanism', '')).lower())
@@ -424,7 +467,7 @@ def _build_s3_analysis_content(analysis_b: dict, records_b: list[dict]) -> str:
     if rollover_cnt > 0:
         mech_parts.append(f"{rollover_cnt} {plural_ru(rollover_cnt, ('заезд', 'заезда', 'заездов'))} критического бокового срыва (High-Speed Soil-Trip Rollover Risk)")
     if nose_in_cnt > 0:
-        mech_parts.append(f"{nose_in_cnt} {plural_ru(nose_in_cnt, ('заезд', 'заезда', 'заездов'))} крутого продольного утыкания (Severe Ditch Nose-In Impact при $V_\\perp > 12\\text{{ м/с}}$)")
+        mech_parts.append(f"{nose_in_cnt} {plural_ru(nose_in_cnt, ('заезд', 'заезда', 'заездов'))} крутого продольного утыкания (Severe Ditch Nose-In Impact при $V_\\perp > 18\\text{{ м/с}}$)")
     if other_cnt > 0:
         mech_parts.append(f"{other_cnt} {plural_ru(other_cnt, ('заезд', 'заезда', 'заездов'))} прочих механизмов")
 
@@ -437,8 +480,8 @@ def _build_s3_analysis_content(analysis_b: dict, records_b: list[dict]) -> str:
 
     if ci_high * 100.0 < 10.0:
         ci_verdict = (
-            f"Верхняя граница 95% доверительного интервала (**{ci_high*100:.2f}%**) строго не достигает нормативного порога **10.0%** "
-            f"(ISO 26262-3 / SAE J2980). Это статистически доказывает, что класс S3 является нерепрезентативным для данного ODD. {s3_mech_sentence}"
+            f"Верхняя граница 95% доверительного интервала (**{ci_high*100:.2f}%**) лежит строго ниже порога **10.0%** "
+            f"(при точечной оценке $P(S3 \\mid \\text{{ДТП}}) = {p_s3:.2f}\\%$). Это подтверждает низкую неопределённость исключения класса S3 для данного ODD. {s3_mech_sentence}"
         )
     elif p_s3 <= 10.0:
         ci_verdict = (
@@ -452,14 +495,35 @@ def _build_s3_analysis_content(analysis_b: dict, records_b: list[dict]) -> str:
         )
 
     lines = [
-        "Для оценки статистической репрезентативности фатальных и критических исходов $S3$ в Подклассе B (сход в кювет) проведен расчет точного 95% биномиального доверительного интервала Клоппера–Пирсона (Clopper–Pearson exact confidence interval):",
+        "**1. Информационные 95% доверительные интервалы Клоппера–Пирсона для $P(\\ge S2 \\mid \\text{ДТП})$ (`SAE J2980:2023 Appendix B §B.1`):**",
+        "Точный биномиальный 95% ДИ Клоппера–Пирсона приводится как **информационный индикатор статистической неопределённости конечной выборки** (при этом нормативная классификация выполняется по точечной оценке вероятности $> 10.0\\%$, верхняя граница ДИ не является жёстким правилом стандарта):",
+        "",
+    ]
+
+    if analysis_a is not None:
+        n_a = analysis_a['total_crashes']
+        k_ge_s2_a = int(analysis_a['counts'].get('S2', 0) + analysis_a['counts'].get('S3', 0))
+        p_ge_s2_a = (k_ge_s2_a / max(1, n_a)) * 100.0
+        ci2_a_lo, ci2_a_hi = _get_cum_ci_95(analysis_a, '>=S2')
+        lines.append(
+            f"* **Строка `1.1.A` (Подкласс А — ограждение):** "
+            f"$P_A(\\ge S2 \\mid \\text{{ДТП}}) = \\frac{{{k_ge_s2_a}}}{{{n_a}}} = {p_ge_s2_a:.2f}\\%$, "
+            f"$\\text{{CI}}_{{95\\%}} = [{ci2_a_lo*100:.2f}\\%, {ci2_a_hi*100:.2f}\\%]$."
+        )
+
+    lines.extend([
+        f"* **Строка `1.1.B` (Подкласс B — кювет):** "
+        f"$P_B(\\ge S2 \\mid \\text{{ДТП}}) = \\frac{{{k_ge_s2_b}}}{{{n_crashes}}} = {p_ge_s2_b:.2f}\\%$, "
+        f"$\\text{{CI}}_{{95\\%}} = [{ci2_b_lo*100:.2f}\\%, {ci2_b_hi*100:.2f}\\%]$.",
+        "",
+        "**2. Детальный анализ критических исходов $S3$ в Подклассе B (сход в кювет):**",
         "",
         f"* **Точечная оценка вероятности S3 при ДТП:** $P(S3 \\mid \\text{{ДТП}}) = \\frac{{{k_s3}}}{{{n_crashes}}} = {p_s3:.2f}\\%$.",
         f"* **Точный 95% доверительный интервал:** $\\text{{CI}}_{{95\\%}} = [{ci_low*100:.2f}\\%, {ci_high*100:.2f}\\%]$.",
         "",
         "**Физико-статистическое заключение по S3:**",
         ci_verdict,
-    ]
+    ])
 
     if s3_runs:
         lines.append("")
@@ -487,8 +551,9 @@ def _build_controllability_content(ctrl_a: dict | None = None, ctrl_b: dict | No
         )
 
     lines = [
-        "По результатам моделирования активного контрруления и торможения водителей после фазы реакции и удержания ($T_{react} + T_{hold}$) "
-        "оценена доля инцидентов $P_{\\text{avoid}}(< S2 \\mid \\text{конфликт})$, в которых удалось предотвратить тяжелый вред ($S2/S3$):",
+        "По результатам моделирования активного контрруления и торможения водителей после фазы реакции $T_{react}$ "
+        "(включающей удержание $T_{hold} \\le T_{react}$) оценена доля инцидентов $P_{\\text{avoid}}(< S2 \\mid \\text{конфликт})$, "
+        "в которых удалось предотвратить тяжелый вред ($S2/S3$):",
         "",
         "| Выборка (active) | Валидных сцен | ДТП ($n_{\\text{crash}}$) | Предотвратили $S2+$ ($k/n$) | $P_{\\text{avoid}}$ (%) | 95% ДИ Клоппера–Пирсона | Класс C | Статус ДИ |",
         "| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :--- |",
@@ -529,21 +594,23 @@ def _build_asil_matrix_content(
     ctrl_all: dict | None = None,
 ) -> str:
     """Формирование итоговой матрицы классификации опасного события и назначения ASIL (Раздел 1.6)."""
-    p_ge_s2_odd = analysis_odd['cum_percentages']['>=S2'] if analysis_odd else 0.0
     p_ge_s2_b = analysis_b['cum_percentages']['>=S2'] if analysis_b else 0.0
     p_ge_s2_a = analysis_a['cum_percentages']['>=S2'] if analysis_a else 0.0
+    s_a_lbl = analysis_a['assigned_class'] if analysis_a else 'S0'
+    s_b_lbl = analysis_b['assigned_class'] if analysis_b else 'S0'
+
+    ci2_a_lo, ci2_a_hi = _get_cum_ci_95(analysis_a, '>=S2') if analysis_a else (0.0, 0.0)
+    ci2_b_lo, ci2_b_hi = _get_cum_ci_95(analysis_b, '>=S2') if analysis_b else (0.0, 0.0)
 
     if analysis_b and analysis_b.get('total_crashes', 0) > 0:
-        k_s3_b = analysis_b['counts'].get('S3', 0)
-        n_b = analysis_b['total_crashes']
-        _, ci_high_b = calc_clopper_pearson_ci(k_s3_b, n_b, confidence=0.95)
+        _, ci_high_b = _get_cum_ci_95(analysis_b, 'S3')
         p_s3_b = analysis_b['cum_percentages']['S3']
         if ci_high_b * 100.0 < 10.0:
-            s3_excl_str = f"Класс S3 исключен статистически ($P_B(S3 \\mid \\text{{ДТП}}) = {p_s3_b:.1f}\\%$, верхняя граница 95% CI: ${ci_high_b*100:.2f}\\% < 10\\%$)."
+            s3_excl_str = f"Класс S3 исключен ($P_B(S3 \\mid \\text{{ДТП}}) = {p_s3_b:.1f}\\%$, верхняя граница 95% ДИ: ${ci_high_b*100:.2f}\\% < 10\\%$)."
         elif p_s3_b <= 10.0:
-            s3_excl_str = f"Доля S3 в Подклассе B составляет $P_B(S3 \\mid \\text{{ДТП}}) = {p_s3_b:.1f}\\% \\le 10\\%$ (95% CI до ${ci_high_b*100:.2f}\\%$)."
+            s3_excl_str = f"Доля S3 в Подклассе B составляет $P_B(S3 \\mid \\text{{ДТП}}) = {p_s3_b:.1f}\\% \\le 10\\%$ (95% ДИ до ${ci_high_b*100:.2f}\\%$)."
         else:
-            s3_excl_str = f"Доля S3 в Подклассе B составляет $P_B(S3 \\mid \\text{{ДТП}}) = {p_s3_b:.1f}\\% > 10\\%$ (95% CI до ${ci_high_b*100:.2f}\\%$)."
+            s3_excl_str = f"Доля S3 в Подклассе B составляет $P_B(S3 \\mid \\text{{ДТП}}) = {p_s3_b:.1f}\\% > 10\\%$ (95% ДИ до ${ci_high_b*100:.2f}\\%$)."
     else:
         s3_excl_str = "Статистическая оценка S3 формируется после прогонов в Подклассе B."
 
@@ -569,18 +636,20 @@ def _build_asil_matrix_content(
     else:
         c_row_label = "**C2** / **C3** (ожид. `--active-input`)"
         c_row_desc = (
-            "• **C2** — нормативная реакция большинства водителей ($\\ge 90\\%$) по парированию заноса после фазы $T_{react}+T_{hold}$.<br>"
+            "• **C2** — нормативная реакция большинства водителей ($\\ge 90\\%$) по парированию заноса после фазы реакции $T_{react}$ ($T_{hold} \\le T_{react}$).<br>"
             "• **C3** — пассивный водитель без контрруления либо невозможность удержания курса ($<90\\%$)."
         )
         measured_row = None
 
+    p2_a_tex = format_iso_pct(p_ge_s2_a).replace('%', '\\%')
+    p2_b_tex = format_iso_pct(p_ge_s2_b).replace('%', '\\%')
     lines = [
-        f"На основе класса тяжести **{s_worst}** (SAE J2980:2023 / ISO 26262-3) формируется матрица классификации опасного события по трем параметрам риска:",
+        f"На основе главного консервативного итога HARA **{s_worst}** (`Worst-Case` по раздельным строкам `1.1.A = {s_a_lbl}`, `1.1.B = {s_b_lbl}`; SAE J2980:2023 §5.2.1.5(g), §5.2.2.2 Note 1 / ISO 26262-3) формируется матрица классификации опасного события по трем параметрам риска:",
         "",
         "| Параметр риска ISO 26262-3 | Назначенный класс | Обоснование и инженерный контекст |",
         "| :--- | :---: | :--- |",
         "| **Опасное событие (Hazardous Event)** | — | **Столкновение с попутным ТС в слепой зоне при перестроении на скорости 100 км/ч (27.78 м/с) с последующим ударом в ограждение или сходом в кювет** |",
-        f"| **Тяжесть (Severity, S)** | **{s_worst}** | Обосновано по результатам моделирования в CARLA: $P(\\ge S2 \\mid \\text{{ДТП}}) = {format_iso_pct(p_ge_s2_odd).replace('%', chr(92) + '%')}$ во взвешенном ODD (${format_iso_pct(p_ge_s2_b).replace('%', chr(92) + '%')}$ в кювете B, ${format_iso_pct(p_ge_s2_a).replace('%', chr(92) + '%')}$ у ограждения A). {s3_excl_str} |",
+        f"| **Тяжесть (Severity, S)** | **{s_worst}** (`1.1.A`: {s_a_lbl}, `1.1.B`: {s_b_lbl}) | Обосновано по раздельным строкам HARA в CARLA: строка `1.1.B` (кювет) — $P_B(\\ge S2 \\mid \\text{{ДТП}}) = {p2_b_tex}$ (95% ДИ $[{ci2_b_lo*100:.2f}\\%, {ci2_b_hi*100:.2f}\\%]$); строка `1.1.A` (ограждение) — $P_A(\\ge S2 \\mid \\text{{ДТП}}) = {p2_a_tex}$ (95% ДИ $[{ci2_a_lo*100:.2f}\\%, {ci2_a_hi*100:.2f}\\%]$). {s3_excl_str} |",
         "| **Экспозиция (Exposure, E)** | **E3** / **E4** | • **E3** — средняя частота возникновения опасной ситуации по ISO 26262-3 Table B.3 (от нескольких раз в год до нескольких раз в месяц, $1\\text{–}10\\%$ времени движения; по частотному расчёту ODD проекта $\\approx 20\\text{–}80\\text{ раз/год}$ или $1.67\\text{–}6.7\\text{ раз/мес}$).<br>• **E4** — консервативная оценка высокой интенсивности трафика ($>10\\%$ длительности поездок / почти в каждой поездке в плотном потоке). |",
         f"| **Контролируемость (Controllability, C)** | {c_row_label} | {c_row_desc} |",
         "",
@@ -769,7 +838,7 @@ def generate_markdown_report(
     table_kinematics = _build_kinematics_table(records)
     odd_paradox = _build_odd_paradox_content(analysis_a, analysis_b, analysis_odd, s_worst)
     conflict_funnel = _build_conflict_funnel_content(analysis_a, analysis_b)
-    s3_analysis = _build_s3_analysis_content(analysis_b, records_b)
+    s3_analysis = _build_s3_analysis_content(analysis_b, records_b, analysis_a=analysis_a)
     controllability_section = _build_controllability_content(ctrl_a, ctrl_b, ctrl_all)
     asil_matrix = _build_asil_matrix_content(
         s_worst, analysis_odd['assigned_class'], analysis_a, analysis_b, analysis_odd,
@@ -778,6 +847,11 @@ def generate_markdown_report(
     barrier_content, ditch_content, asymmetry_content = _build_mechanisms_and_asymmetry_content(
         records, analysis_a, analysis_b,
     )
+
+    ci2_a_lo, ci2_a_hi = _get_cum_ci_95(analysis_a, '>=S2')
+    ci2_b_lo, ci2_b_hi = _get_cum_ci_95(analysis_b, '>=S2')
+    p_ge_s2_a_pct = format_iso_pct(analysis_a['cum_percentages']['>=S2']).replace('%', '\\%')
+    p_ge_s2_b_pct = format_iso_pct(analysis_b['cum_percentages']['>=S2']).replace('%', '\\%')
 
     context = {
         'total_runs': total_runs,
@@ -799,6 +873,12 @@ def generate_markdown_report(
         'decision_reason_b': analysis_b['decision_reason'],
         'assigned_class_c': analysis_b['assigned_class'],
         'decision_reason_c': analysis_b['decision_reason'],
+        'p_ge_s2_a_pct': p_ge_s2_a_pct,
+        'ci_ge_s2_a_low': f"{ci2_a_lo*100:.2f}\\%",
+        'ci_ge_s2_a_high': f"{ci2_a_hi*100:.2f}\\%",
+        'p_ge_s2_b_pct': p_ge_s2_b_pct,
+        'ci_ge_s2_b_low': f"{ci2_b_lo*100:.2f}\\%",
+        'ci_ge_s2_b_high': f"{ci2_b_hi*100:.2f}\\%",
         's_worst': s_worst,
         's_worst_bold': f"\\mathbf{{{s_worst}}}",
         'assigned_class_odd': analysis_odd['assigned_class'],
@@ -844,48 +924,62 @@ def print_console_summary(
     w_a = weights.get('A', 0.20)
     w_b = weights.get('B', 0.80)
 
-    print("\n" + "=" * 108)
-    print(" СВОДНАЯ ОЦЕНКА ТЯЖЕСТИ HARA ПО СТАНДАРТАМ ISO 26262-3 / SAE J2980:2023 (>10% RULE ПО ВЫБОРКЕ ДТП)")
-    print("=" * 108)
-    header = f"{'Профиль ODD':<24} | {'Вес':<4} | {'N_tot (Конфл)':<14} | {'N_crash':<7} | {'S0 (%)':<8} | {'S1 (%)':<8} | {'S2 (%)':<8} | {'S3 (%)':<8} | {'P(≥S2)':<7} | {'Вердикт':<7}"
-    print(header)
-    print("-" * 108)
+    ci2_a_lo, ci2_a_hi = _get_cum_ci_95(analysis_a, '>=S2')
+    ci2_b_lo, ci2_b_hi = _get_cum_ci_95(analysis_b, '>=S2')
 
-    def print_row(name, weight, n_tot_str, n_crash, pcts, cum_pcts, assigned):
+    print("\n" + "=" * 124)
+    print(" СВОДНАЯ ОЦЕНКА ТЯЖЕСТИ HARA ПО СТАНДАРТАМ ISO 26262-3 / SAE J2980:2023 (>10% RULE ПО ВЫБОРКЕ ДТП)")
+    print("=" * 124)
+    header = f"{'Профиль ODD':<26} | {'Вес':<4} | {'N_tot (Конфл)':<14} | {'N_crash':<7} | {'S0 (%)':<7} | {'S1 (%)':<7} | {'S2 (%)':<7} | {'S3 (%)':<7} | {'P(≥S2)':<7} | {'95% ДИ P(≥S2)':<16} | {'Вердикт':<8}"
+    print(header)
+    print("-" * 124)
+
+    def print_row(name, weight, n_tot_str, n_crash, pcts, cum_pcts, ci_str, assigned):
         s0_str = f"{pcts.get('S0',0):.1f}%"
         s1_str = f"{pcts.get('S1',0):.1f}%"
         s2_str = f"{pcts.get('S2',0):.1f}%"
         s3_str = f"{pcts.get('S3',0):.1f}%"
         p_ge_s2 = format_iso_pct(cum_pcts.get('>=S2', 0))
-        print(f"{name:<24} | {weight:<4.2f} | {n_tot_str:<14} | {n_crash:<7} | {s0_str:<8} | {s1_str:<8} | {s2_str:<8} | {s3_str:<8} | {p_ge_s2:<7} | {assigned:<7}")
+        print(f"{name:<26} | {weight:<4.2f} | {n_tot_str:<14} | {n_crash:<7} | {s0_str:<7} | {s1_str:<7} | {s2_str:<7} | {s3_str:<7} | {p_ge_s2:<7} | {ci_str:<16} | {assigned:<8}")
 
     n_tot_a_str = f"{analysis_a['total_runs']} ({analysis_a['conflict_rate']:.1f}%)"
     print_row(
-        "Подкласс А (Ограждение)", w_a, n_tot_a_str, analysis_a['total_crashes'],
-        analysis_a['percentages'], analysis_a['cum_percentages'], f"S{SEVERITY_RANK[analysis_a['assigned_class']]}",
+        "1.1.A Подкласс А (Барьер)", w_a, n_tot_a_str, analysis_a['total_crashes'],
+        analysis_a['percentages'], analysis_a['cum_percentages'],
+        f"[{ci2_a_lo*100:.1f}%, {ci2_a_hi*100:.1f}%]",
+        f"S{SEVERITY_RANK[analysis_a['assigned_class']]}",
     )
 
     n_tot_b_str = f"{analysis_b['total_runs']} ({analysis_b['conflict_rate']:.1f}%)"
     print_row(
-        "Подкласс B (Кювет)", w_b, n_tot_b_str, analysis_b['total_crashes'],
-        analysis_b['percentages'], analysis_b['cum_percentages'], f"S{SEVERITY_RANK[analysis_b['assigned_class']]}",
+        "1.1.B Подкласс B (Кювет)", w_b, n_tot_b_str, analysis_b['total_crashes'],
+        analysis_b['percentages'], analysis_b['cum_percentages'],
+        f"[{ci2_b_lo*100:.1f}%, {ci2_b_hi*100:.1f}%]",
+        f"S{SEVERITY_RANK[analysis_b['assigned_class']]}",
     )
 
-    print("-" * 108)
+    print("-" * 124)
     tot_runs_odd = max(1, analysis_odd['total_runs'])
     n_tot_odd_str = f"{analysis_odd['total_runs']} ({(analysis_odd['total_crashes']/tot_runs_odd)*100:.1f}%)"
+    print(f"{'WORST-CASE SUBCLASS (HARA)':<26} | {'-':<4} | {n_tot_odd_str:<14} | {analysis_odd['total_crashes']:<7} | {'-':<7} | {'-':<7} | {'-':<7} | {'-':<7} | {'-':<7} | {'-':<16} | >>> {s_worst} <<<")
     print_row(
-        "ВЗВЕШЕННЫЙ ODD (Пул)", 1.00, n_tot_odd_str, analysis_odd['total_crashes'],
-        analysis_odd['percentages'], analysis_odd['cum_percentages'], f"{analysis_odd['assigned_class']}",
+        "Взвешенный ODD (справочно)", 1.00, n_tot_odd_str, analysis_odd['total_crashes'],
+        analysis_odd['percentages'], analysis_odd['cum_percentages'],
+        "-",
+        f"{analysis_odd['assigned_class']}*",
     )
-    print("-" * 108)
-    print(f"{'WORST-CASE SUBCLASS':<24} | {'-':<4} | {n_tot_odd_str:<14} | {analysis_odd['total_crashes']:<7} | {'-':<8} | {'-':<8} | {'-':<8} | {'-':<8} | {'-':<7} | >>> {s_worst} <<<")
-    print("=" * 108)
-    print("МНОГОУРОВНЕВЫЙ ВЕРДИКТ HARA (ПО ВЫБОРКЕ СОСТОЯВШИХСЯ ДТП):")
-    print(f"  * Подкласс А (Ограждение слева): {analysis_a['assigned_class']} ({analysis_a['decision_step']})")
-    print(f"  * Подкласс B (Кювет справа):     {analysis_b['assigned_class']} ({analysis_b['decision_step']})")
-    print(f"  * Worst-Case Subclass:           >>> {s_worst} <<< (консервативно для раздельных строк HARA)")
-    print(f"  * Взвешенный ODD:                >>> {analysis_odd['assigned_class']} <<< (при сведении в единый пул ODD)")
+    print("=" * 124)
+    print("ИТОГОВЫЕ ВЕРДИКТЫ HARA (SAE J2980:2023 §5.2.1.5(g), §5.2.2.2 Note 1 — ПО ВЫБОРКЕ ДТП):")
+    print(
+        f"  * Строка 1.1.A (Ограждение слева): {analysis_a['assigned_class']} "
+        f"({analysis_a['decision_step']}; P(>=S2) 95% CI [{ci2_a_lo*100:.2f}%, {ci2_a_hi*100:.2f}%])"
+    )
+    print(
+        f"  * Строка 1.1.B (Кювет справа):     {analysis_b['assigned_class']} "
+        f"({analysis_b['decision_step']}; P(>=S2) 95% CI [{ci2_b_lo*100:.2f}%, {ci2_b_hi*100:.2f}%])"
+    )
+    print(f"  * Главный итог HARA (Worst-Case):  >>> {s_worst} <<< = max(S_A, S_B)")
+    print(f"  * Взвешенный ODD (справочно*):     {analysis_odd['assigned_class']} (не используется для вердикта HARA)")
 
     if ctrl_all is not None:
         print("-" * 108)

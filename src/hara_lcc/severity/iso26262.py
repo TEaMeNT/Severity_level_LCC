@@ -124,6 +124,7 @@ def evaluate_iso_severity(counts: dict, total_crashes: int, total_runs: int = No
             'counts': {s: 0 for s in SEVERITY_CLASSES},
             'percentages': {s: 0.0 for s in SEVERITY_CLASSES},
             'cum_percentages': {'S3': 0.0, '>=S2': 0.0, '>=S1': 0.0},
+            'cum_ci_95': {'S3': (0.0, 0.0), '>=S2': (0.0, 0.0), '>=S1': (0.0, 0.0)},
             'assigned_class': 'S0',
             'decision_step': 'Шаг 4: Нет данных (S0)',
             'decision_reason': 'Отсутствуют прогоны с состоявшимися ДТП для анализа.',
@@ -134,10 +135,19 @@ def evaluate_iso_severity(counts: dict, total_crashes: int, total_runs: int = No
     p_ge_s2 = pcts['S3'] + pcts['S2']
     p_ge_s1 = pcts['S3'] + pcts['S2'] + pcts['S1']
 
+    k_s3 = int(counts.get('S3', 0))
+    k_ge_s2 = int(counts.get('S3', 0) + counts.get('S2', 0))
+    k_ge_s1 = int(counts.get('S3', 0) + counts.get('S2', 0) + counts.get('S1', 0))
+
     cum_pcts = {
         'S3': p_s3,
         '>=S2': p_ge_s2,
         '>=S1': p_ge_s1,
+    }
+    cum_ci_95 = {
+        'S3': calc_clopper_pearson_ci(k_s3, total_crashes, confidence=0.95),
+        '>=S2': calc_clopper_pearson_ci(k_ge_s2, total_crashes, confidence=0.95),
+        '>=S1': calc_clopper_pearson_ci(k_ge_s1, total_crashes, confidence=0.95),
     }
 
     # Алгоритм кумулятивной проверки сверху вниз (от S3 к S1) строго по P(S_i | ДТП)
@@ -177,6 +187,7 @@ def evaluate_iso_severity(counts: dict, total_crashes: int, total_runs: int = No
         'counts': counts,
         'percentages': pcts,
         'cum_percentages': cum_pcts,
+        'cum_ci_95': cum_ci_95,
         'assigned_class': assigned_class,
         'decision_step': decision_step,
         'decision_reason': decision_reason,

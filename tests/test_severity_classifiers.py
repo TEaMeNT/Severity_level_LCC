@@ -3,11 +3,31 @@
 from __future__ import annotations
 
 import csv
+import math
 from pathlib import Path
 
 import pytest
 
-from hara_lcc.config import SEVERITY_FROM_RANK, SUBCLASS_A, SUBCLASS_B
+from hara_lcc.config import (
+    DITCH_NON_TRACKING_BETA_DEG,
+    DITCH_S1_SKID_VLAT_MPS,
+    DITCH_S1_TRACKING_VPERP_MPS,
+    DITCH_S2_BOTTOM_VPERP_MPS,
+    DITCH_S2_SKID_BETA_DEG,
+    DITCH_S2_SKID_VDEP_MPS,
+    DITCH_S2_TRIP_VDEP_MPS,
+    DITCH_S2_TRIP_VLAT_MPS,
+    DITCH_S3_NOSE_VPERP_MPS,
+    DITCH_S3_SKID_BETA_DEG,
+    DITCH_S3_SKID_VDEP_MPS,
+    DITCH_S3_SPIN_BETA_DEG,
+    DITCH_S3_SPIN_OMEGA_Z_DEG_S,
+    DITCH_VDEP_TRACKING_MIN_MPS,
+    SEVERITY_FROM_RANK,
+    SEVERITY_RANK,
+    SUBCLASS_A,
+    SUBCLASS_B,
+)
 from hara_lcc.severity.classifiers import (
     classify_barrier_severity,
     classify_ditch_boundary,
@@ -82,24 +102,80 @@ def test_barrier_impact_inward_projection_and_bounce_rejection():
 
 
 def test_ditch_variant_b_all_branches():
-    # S0: Shallow grazing
+    # S0: Shallow grazing (V_dep <= 8 или V_perp <= 2 & V_lat <= 2 & beta < 15)
     assert classify_ditch_boundary(v_dep=7.5, v_perp_road=1.5, v_lat_car=1.0, beta=5.0, omega_z=5.0) == (0, 'Shallow Grazing Departure')
-    # S1: Tracking slope departure (V_dep > 8, V_perp > 2)
+    assert classify_ditch_boundary(v_dep=20.0, v_perp_road=1.5, v_lat_car=1.8, beta=5.2, omega_z=2.0) == (0, 'Shallow Grazing Departure')
+    # S1: Tracking slope departure внутри AASHTO RDG (V_dep > 8, 2 < V_perp <= 12)
     assert classify_ditch_boundary(v_dep=15.0, v_perp_road=3.0, v_lat_car=1.5, beta=6.0, omega_z=5.0) == (1, 'Traversable Tracking Slope Departure')
-    # S1: Low-speed skid (beta >= 15, V_dep <= 11)
+    # S1: Бывший порог V_perp=8.10 м/с теперь внутри безопасной зоны AASHTO RDG Fig. 3-7 (11.34 м/с) -> S1
+    assert classify_ditch_boundary(v_dep=25.94, v_perp_road=8.10, v_lat_car=3.32, beta=7.4, omega_z=2.4) == (1, 'Traversable Tracking Slope Departure')
+    assert classify_ditch_boundary(v_dep=25.95, v_perp_road=11.34, v_lat_car=4.0, beta=8.9, omega_z=3.0) == (1, 'Traversable Tracking Slope Departure')
+    # S1: Low-speed skid (beta >= 15, V_dep <= 11) и боковое скольжение V_lat > 2.0 (строгое вложение S2 => S1)
     assert classify_ditch_boundary(v_dep=9.5, v_perp_road=1.5, v_lat_car=2.8, beta=22.0, omega_z=15.0) == (1, 'Traversable Tracking Slope Departure')
-    # S2: Cooperrider soil-trip (V_dep > 14, beta >= 15, V_lat > 5.5)
-    assert classify_ditch_boundary(v_dep=22.0, v_perp_road=4.0, v_lat_car=6.0, beta=16.0, omega_z=10.0) == (2, 'Moderate Rollover Risk')
-    # S2: Non-tracking skid (V_dep > 11, beta >= 20)
+    assert classify_ditch_boundary(v_dep=25.0, v_perp_road=1.5, v_lat_car=5.4, beta=12.5, omega_z=2.0) == (1, 'Traversable Tracking Slope Departure')
+    # S2: Чистый Cooperrider soil-trip без ручного гейта beta >= 15° (V_dep > 14, V_lat > 5.5)
+    assert classify_ditch_boundary(v_dep=25.0, v_perp_road=5.8, v_lat_car=6.0, beta=13.9, omega_z=10.0) == (2, 'Moderate Rollover Risk')
+    assert classify_ditch_boundary(v_dep=27.78, v_perp_road=1.2, v_lat_car=5.6, beta=11.6, omega_z=3.0) == (2, 'Moderate Rollover Risk')
+    # S2: Non-tracking skid NCHRP 665 (V_dep > 11, beta >= 20)
     assert classify_ditch_boundary(v_dep=13.24, v_perp_road=5.41, v_lat_car=5.12, beta=22.8, omega_z=159.2) == (2, 'Moderate Rollover Risk')
-    # S2: Hard Ditch Bottom Impact (V_dep > 8, V_perp > 8.0)
-    assert classify_ditch_boundary(v_dep=25.94, v_perp_road=8.10, v_lat_car=3.32, beta=7.4, omega_z=2.4) == (2, 'Hard Ditch Bottom Impact')
+    # S2: Hard Ditch Bottom Impact — выход за предел AASHTO RDG (V_dep > 8, 12.0 < V_perp <= 18.0)
+    assert classify_ditch_boundary(v_dep=22.0, v_perp_road=12.5, v_lat_car=2.0, beta=5.0, omega_z=5.0) == (2, 'Hard Ditch Bottom Impact')
     # S3: High-Speed Soil-Trip Rollover (beta >= 25)
     assert classify_ditch_boundary(v_dep=24.04, v_perp_road=6.29, v_lat_car=12.67, beta=31.8, omega_z=33.5) == (3, 'High-Speed Soil-Trip Rollover')
     # S3: High-Speed Soil-Trip Rollover (beta >= 20 and omega_z > 45)
     assert classify_ditch_boundary(v_dep=20.0, v_perp_road=5.0, v_lat_car=7.0, beta=21.0, omega_z=50.0) == (3, 'High-Speed Soil-Trip Rollover')
-    # S3: Severe Ditch Nose-In Impact (V_dep > 8, V_perp > 12.0)
-    assert classify_ditch_boundary(v_dep=18.0, v_perp_road=12.5, v_lat_car=2.0, beta=5.0, omega_z=5.0) == (3, 'Severe Ditch Nose-In Impact')
+    # S3: Severe Ditch Nose-In Impact — экстремально крутой влёт (V_dep > 8, V_perp > 18.0)
+    assert classify_ditch_boundary(v_dep=27.0, v_perp_road=18.5, v_lat_car=2.0, beta=4.2, omega_z=5.0) == (3, 'Severe Ditch Nose-In Impact')
+
+
+def test_ditch_strict_nesting_s3_implies_s2_implies_s1_on_physical_grid():
+    """
+    Проверка строгого вложения S3 => S2 => S1 и отсутствия скачков S0 -> S2
+    на всей физичной 5D-сетке (V_dep, V_perp, V_lat = V_dep*sin(beta), beta, omega_z).
+    """
+    v_deps = [0.5, 4.0, 7.9, 8.0, 8.1, 10.9, 11.1, 13.9, 14.1, 16.0, 17.9, 18.1, 21.2, 22.0, 25.0, 27.78, 32.0]
+    betas = [0.0, 3.0, 6.0, 10.0, 11.4, 11.6, 12.5, 14.0, 14.9, 15.0, 19.9, 20.0, 24.9, 25.0, 35.0, 50.0, 75.0]
+    thetas = [0.0, 1.0, 3.0, 5.0, 10.0, 15.0, 25.0, 35.0, 42.0, 55.0, 75.0]
+    omegas = [0.0, 20.0, 44.9, 45.1, 90.0]
+
+    checked = 0
+    for v_dep in v_deps:
+        for beta in betas:
+            v_lat = v_dep * math.sin(math.radians(beta))
+            for theta in thetas:
+                v_perp = v_dep * math.sin(math.radians(theta))
+                for omega_z in omegas:
+                    checked += 1
+                    is_non_tracking = beta >= DITCH_NON_TRACKING_BETA_DEG
+                    is_s3 = (
+                        (v_dep > DITCH_S3_SKID_VDEP_MPS and (beta >= DITCH_S3_SKID_BETA_DEG or (beta >= DITCH_S3_SPIN_BETA_DEG and omega_z > DITCH_S3_SPIN_OMEGA_Z_DEG_S)))
+                        or (v_dep > DITCH_VDEP_TRACKING_MIN_MPS and v_perp > DITCH_S3_NOSE_VPERP_MPS)
+                    )
+                    is_s2 = (
+                        (v_dep > DITCH_S2_TRIP_VDEP_MPS and v_lat > DITCH_S2_TRIP_VLAT_MPS)
+                        or (v_dep > DITCH_S2_SKID_VDEP_MPS and beta >= DITCH_S2_SKID_BETA_DEG)
+                        or (v_dep > DITCH_VDEP_TRACKING_MIN_MPS and v_perp > DITCH_S2_BOTTOM_VPERP_MPS)
+                    )
+                    is_s1 = (
+                        (v_dep > DITCH_VDEP_TRACKING_MIN_MPS and v_perp > DITCH_S1_TRACKING_VPERP_MPS)
+                        or is_non_tracking
+                        or (v_dep > DITCH_VDEP_TRACKING_MIN_MPS and v_lat > DITCH_S1_SKID_VLAT_MPS)
+                    )
+
+                    if is_s3:
+                        assert is_s2, f"Нарушение S3 => S2: {(v_dep, v_perp, v_lat, beta, omega_z)}"
+                    if is_s2:
+                        assert is_s1, f"Нарушение S2 => S1 (скачок S0 -> S2): {(v_dep, v_perp, v_lat, beta, omega_z)}"
+
+                    sev, _ = classify_ditch_boundary(v_dep, v_perp, v_lat, beta, omega_z)
+                    expected = 3 if is_s3 else (2 if is_s2 else (1 if is_s1 else 0))
+                    assert sev == expected
+
+    # Непрерывность перехода через порог Cooperrider V_lat = 5.5 м/с при V_perp <= 2.0 м/с и beta < 15°
+    sev_below, _ = classify_ditch_boundary(v_dep=27.78, v_perp_road=1.0, v_lat_car=5.49, beta=11.4, omega_z=0.0)
+    sev_above, _ = classify_ditch_boundary(v_dep=27.78, v_perp_road=1.0, v_lat_car=5.51, beta=11.45, omega_z=0.0)
+    assert (sev_below, sev_above) == (1, 2)
+    assert checked > 15000
 
 
 def test_crossover_ditch_supported_in_both_subclasses():
@@ -143,8 +219,9 @@ def test_crossover_ditch_supported_in_both_subclasses():
         ("49",  SUBCLASS_A, "S1", "S2", "S1", "S2", "Traversable Tracking Slope Departure", True),
         ("24",  SUBCLASS_A, "S0", "S1", "S2", "S2", "Moderate Rollover Risk", True),
         ("164", SUBCLASS_B, "S1", "S0", "S1", "S1", "Traversable Tracking Slope Departure", True),
-        ("156", SUBCLASS_B, "S1", "S0", "S2", "S2", "Hard Ditch Bottom Impact", True),
-        ("200", SUBCLASS_B, "S1", "S0", "S2", "S2", "Hard Ditch Bottom Impact", True),
+        ("156", SUBCLASS_B, "S1", "S0", "S1", "S1", "Traversable Tracking Slope Departure", True),
+        ("200", SUBCLASS_B, "S1", "S0", "S1", "S1", "Traversable Tracking Slope Departure", True),
+        ("158", SUBCLASS_B, "S1", "S0", "S2", "S2", "Moderate Rollover Risk", True),
         ("113", SUBCLASS_B, "S1", "S0", "S3", "S3", "High-Speed Soil-Trip Rollover", True),
         ("116", SUBCLASS_B, "S1", "S0", "S3", "S3", "High-Speed Soil-Trip Rollover", True),
     ],
@@ -182,13 +259,30 @@ def test_baseline_v1_reference_cases(
         assert mech == expected_mech
 
 
-def test_all_200_baseline_rows_match_raw_csv_severity_columns(baseline_csv_path: Path, baseline_records: list[dict]):
+def test_all_200_baseline_rows_consistent_with_updated_classifiers(baseline_csv_path: Path, baseline_records: list[dict]):
     with open(baseline_csv_path, mode='r', encoding='utf-8-sig') as f:
         raw_rows = list(csv.DictReader(f))
     assert len(raw_rows) == len(baseline_records) == 200
 
     for raw, parsed in zip(raw_rows, baseline_records):
+        # Первичный боковой удар и барьер не менялись относительно v1.0
         assert parsed["sev_side"] == raw["sev_side"]
         assert parsed["sev_barrier"] == raw["sev_barrier"]
-        assert parsed["sev_ditch"] == raw["sev_ditch"]
-        assert parsed["severity"] == raw["severity"]
+        # Кювет пересчитан чистым классификатором v1.1 (V_perp 12/18 + чистый Cooperrider)
+        if parsed["ditch_departure_actor"] not in ("None", "") and parsed["departure_speed_mps"]:
+            sev_int, _ = classify_ditch_boundary(
+                v_dep=parsed["departure_speed_mps"],
+                v_perp_road=parsed["road_perp_speed_mps"],
+                v_lat_car=parsed["vehicle_lat_skid_mps"],
+                beta=parsed["sideslip_angle_deg"],
+                omega_z=parsed["departure_yaw_rate_deg_s"],
+            )
+            assert parsed["sev_ditch"] == SEVERITY_FROM_RANK[sev_int]
+        expected_final = SEVERITY_FROM_RANK[
+            max(
+                SEVERITY_RANK[parsed["sev_side"]],
+                SEVERITY_RANK[parsed["sev_barrier"]],
+                SEVERITY_RANK[parsed["sev_ditch"]],
+            )
+        ]
+        assert parsed["severity"] == expected_final

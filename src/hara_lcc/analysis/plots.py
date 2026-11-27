@@ -21,6 +21,20 @@ import numpy as np
 
 from hara_lcc.analysis.stats import format_iso_pct
 from hara_lcc.config import (
+    DITCH_NON_TRACKING_BETA_DEG,
+    DITCH_S1_SKID_VLAT_MPS,
+    DITCH_S1_TRACKING_VPERP_MPS,
+    DITCH_S2_BOTTOM_VPERP_MPS,
+    DITCH_S2_SKID_BETA_DEG,
+    DITCH_S2_SKID_VDEP_MPS,
+    DITCH_S2_TRIP_VDEP_MPS,
+    DITCH_S2_TRIP_VLAT_MPS,
+    DITCH_S3_NOSE_VPERP_MPS,
+    DITCH_S3_SKID_BETA_DEG,
+    DITCH_S3_SKID_VDEP_MPS,
+    DITCH_S3_SPIN_BETA_DEG,
+    DITCH_S3_SPIN_OMEGA_Z_DEG_S,
+    DITCH_VDEP_TRACKING_MIN_MPS,
     SEVERITY_CLASSES,
     SEVERITY_COLORS,
     SEVERITY_RANK,
@@ -28,6 +42,8 @@ from hara_lcc.config import (
     SUBCLASS_B,
 )
 from hara_lcc.severity.iso26262 import (
+    calc_clopper_pearson_ci,
+    compute_worst_case_verdict,
     is_crash_run,
     is_spawn_error_run,
     is_valid_barrier_hit,
@@ -191,13 +207,32 @@ def annotate_ditch_points(
         )
 
 
+def _get_cum_ci_95(analysis: dict, key: str) -> tuple[float, float]:
+    """Извлечение 95% ДИ Клоппера–Пирсона для кумулятивной доли ('S3', '>=S2', '>=S1')."""
+    cum_ci = analysis.get('cum_ci_95')
+    if isinstance(cum_ci, dict) and key in cum_ci:
+        return cum_ci[key]
+    n = int(analysis.get('total_crashes', 0))
+    counts = analysis.get('counts', {})
+    if key == 'S3':
+        k = int(counts.get('S3', 0))
+    elif key == '>=S2':
+        k = int(counts.get('S3', 0) + counts.get('S2', 0))
+    else:
+        k = int(counts.get('S3', 0) + counts.get('S2', 0) + counts.get('S1', 0))
+    return calc_clopper_pearson_ci(k, n, confidence=0.95)
+
+
 def plot_severity_distribution(analysis_a: dict, analysis_b: dict, analysis_odd: dict, plots_dir: str) -> str:
     """График 1: 01_severity_distribution.png — фактическое распределение S0–S3 среди ДТП."""
     n_crash_total = analysis_a['total_crashes'] + analysis_b['total_crashes']
     w_a = analysis_odd['weights']['A']
     w_b = analysis_odd['weights']['B']
 
-    fig, ax = plt.subplots(figsize=(10.5, 6), dpi=300)
+    ci2_a_lo, ci2_a_hi = _get_cum_ci_95(analysis_a, '>=S2')
+    ci2_b_lo, ci2_b_hi = _get_cum_ci_95(analysis_b, '>=S2')
+
+    fig, ax = plt.subplots(figsize=(10.5, 6.2), dpi=300)
     x = np.arange(len(SEVERITY_CLASSES))
     width = 0.26
 
@@ -207,18 +242,26 @@ def plot_severity_distribution(analysis_a: dict, analysis_b: dict, analysis_odd:
 
     rects_a = ax.bar(
         x - width, vals_a, width,
-        label=f"Подкласс А (Ограждение, n={analysis_a['total_crashes']})",
+        label=(
+            f"1.1.A Подкласс А (Ограждение, n={analysis_a['total_crashes']}, "
+            f"P(≥S2)={format_iso_pct(analysis_a['cum_percentages']['>=S2'])} "
+            f"[95% ДИ {ci2_a_lo*100:.1f}–{ci2_a_hi*100:.1f}%])"
+        ),
         color='#2980b9', edgecolor='black', linewidth=0.8, alpha=0.9,
     )
     rects_b = ax.bar(
         x, vals_b, width,
-        label=f"Подкласс B (Кювет, n={analysis_b['total_crashes']})",
+        label=(
+            f"1.1.B Подкласс B (Кювет, n={analysis_b['total_crashes']}, "
+            f"P(≥S2)={format_iso_pct(analysis_b['cum_percentages']['>=S2'])} "
+            f"[95% ДИ {ci2_b_lo*100:.1f}–{ci2_b_hi*100:.1f}%])"
+        ),
         color='#8e44ad', edgecolor='black', linewidth=0.8, alpha=0.9,
     )
     rects_odd = ax.bar(
         x + width, vals_odd, width,
-        label=f"Взвешенный ODD ({w_a:.2f}A + {w_b:.2f}B)",
-        color='#2c3e50', edgecolor='black', linewidth=0.8, alpha=0.9,
+        label=f"Взвешенный ODD ({w_a:.2f}A + {w_b:.2f}B, справочно)",
+        color='#7f8c8d', edgecolor='black', linewidth=0.8, alpha=0.65,
     )
 
     for rect, s in zip(rects_a, SEVERITY_CLASSES):
@@ -247,11 +290,11 @@ def plot_severity_distribution(analysis_a: dict, analysis_b: dict, analysis_odd:
             f"{h:.1f}%",
             xy=(rect.get_x() + rect.get_width() / 2, h),
             xytext=(0, 4), textcoords="offset points",
-            ha='center', va='bottom', fontsize=9, fontweight='bold', color='#2c3e50',
+            ha='center', va='bottom', fontsize=8.5, fontweight='bold', color='#566573',
         )
 
     max_h = max(vals_a + vals_b + vals_odd + [10.0])
-    ax.set_ylim(0, max_h * 1.25)
+    ax.set_ylim(0, max_h * 1.28)
 
     ax.set_ylabel('Доля от числа ДТП (%)', fontsize=12, fontweight='bold')
     ax.set_title(
@@ -264,7 +307,7 @@ def plot_severity_distribution(analysis_a: dict, analysis_b: dict, analysis_odd:
         fontsize=10, fontweight='bold',
     )
     ax.grid(axis='y', linestyle=':', alpha=0.6)
-    ax.legend(loc='upper right', frameon=True, fontsize=10)
+    ax.legend(loc='upper right', frameon=True, fontsize=8.8)
     plt.tight_layout()
     plot1_path = os.path.join(plots_dir, "01_severity_distribution.png")
     safe_savefig(plot1_path, dpi=300, bbox_inches='tight')
@@ -273,61 +316,88 @@ def plot_severity_distribution(analysis_a: dict, analysis_b: dict, analysis_odd:
 
 
 def plot_cumulative_iso_decision(analysis_a: dict, analysis_b: dict, analysis_odd: dict, plots_dir: str) -> str:
-    """График 2: 02_cumulative_iso_decision.png — воронка кумулятивного правила >10% ISO 26262-3."""
-    fig, ax = plt.subplots(figsize=(10.5, 6.2), dpi=300)
+    """
+    График 2: 02_cumulative_iso_decision.png — воронка кумулятивного правила >10% ISO 26262-3
+    для раздельных строк HARA 1.1.A и 1.1.B с 95% ДИ Клоппера–Пирсона (SAE J2980 §5.2.1.5(g), §B.1).
+    """
+    fig, ax = plt.subplots(figsize=(11.2, 6.6), dpi=300)
     steps = [
         'Шаг 1: P(S3 | ДТП)\n[Критические травмы]',
         'Шаг 2: P(≥S2 | ДТП)\n[Тяжелые и критические]',
         'Шаг 3: P(≥S1 | ДТП)\n[Любые травмы]',
     ]
+    step_keys = ['S3', '>=S2', '>=S1']
     x = np.arange(len(steps))
-    width = 0.25
+    width = 0.34
 
-    vals_a_cum = [analysis_a['cum_percentages']['S3'], analysis_a['cum_percentages']['>=S2'], analysis_a['cum_percentages']['>=S1']]
-    vals_b_cum = [analysis_b['cum_percentages']['S3'], analysis_b['cum_percentages']['>=S2'], analysis_b['cum_percentages']['>=S1']]
-    vals_odd_cum = [analysis_odd['cum_percentages']['S3'], analysis_odd['cum_percentages']['>=S2'], analysis_odd['cum_percentages']['>=S1']]
+    vals_a_cum = [analysis_a['cum_percentages'][k] for k in step_keys]
+    vals_b_cum = [analysis_b['cum_percentages'][k] for k in step_keys]
+
+    cis_a = [_get_cum_ci_95(analysis_a, k) for k in step_keys]
+    cis_b = [_get_cum_ci_95(analysis_b, k) for k in step_keys]
+
+    yerr_a = np.array([
+        [max(0.0, v - lo * 100.0) for v, (lo, _) in zip(vals_a_cum, cis_a)],
+        [max(0.0, hi * 100.0 - v) for v, (_, hi) in zip(vals_a_cum, cis_a)],
+    ])
+    yerr_b = np.array([
+        [max(0.0, v - lo * 100.0) for v, (lo, _) in zip(vals_b_cum, cis_b)],
+        [max(0.0, hi * 100.0 - v) for v, (_, hi) in zip(vals_b_cum, cis_b)],
+    ])
+
+    s_worst = compute_worst_case_verdict(analysis_a['assigned_class'], analysis_b['assigned_class'])
 
     r_a = ax.bar(
-        x - width, vals_a_cum, width,
-        label=f"Подкласс А (Ограждение, итог: {analysis_a['assigned_class']})",
+        x - width / 2, vals_a_cum, width,
+        yerr=yerr_a, capsize=4.5, error_kw=dict(ecolor='#1b4f72', elinewidth=1.3, capthick=1.2, zorder=6),
+        label=f"Строка HARA 1.1.A — Подкласс А (Ограждение, n={analysis_a['total_crashes']}, итог: {analysis_a['assigned_class']})",
         color='#2980b9', edgecolor='black', linewidth=0.8,
     )
     r_b = ax.bar(
-        x, vals_b_cum, width,
-        label=f"Подкласс B (Кювет, итог: {analysis_b['assigned_class']})",
+        x + width / 2, vals_b_cum, width,
+        yerr=yerr_b, capsize=4.5, error_kw=dict(ecolor='#4a235a', elinewidth=1.3, capthick=1.2, zorder=6),
+        label=f"Строка HARA 1.1.B — Подкласс B (Кювет, n={analysis_b['total_crashes']}, итог: {analysis_b['assigned_class']})",
         color='#8e44ad', edgecolor='black', linewidth=0.8,
-    )
-    r_odd = ax.bar(
-        x + width, vals_odd_cum, width,
-        label=f"Взвешенный ODD (итог: {analysis_odd['assigned_class']})",
-        color='#2c3e50', edgecolor='black', linewidth=0.8,
     )
 
     ax.axhspan(0, 10.0, color='gray', alpha=0.15, label='Зона отсечки нерепрезентативных исходов ≤ 10%')
     ax.axhline(
         10.0, color='#e74c3c', linestyle='--', linewidth=2.0, zorder=5,
-        label='Порог репрезентативности 10.0% (ISO 26262-3 / SAE J2980:2023)',
+        label='Порог репрезентативности 10.0% (точечная оценка, ISO 26262-3 / SAE J2980)',
+    )
+    ax.errorbar(
+        [], [], yerr=1.0, fmt='none', ecolor='#2c3e50', elinewidth=1.3, capsize=4.5,
+        label='Усы: 95% ДИ Клоппера–Пирсона (информац. неопределённость выборки, SAE J2980 §B.1)',
     )
 
-    for rect in list(r_a) + list(r_b) + list(r_odd):
-        h = rect.get_height()
-        ax.annotate(
-            format_iso_pct(h),
-            xy=(rect.get_x() + rect.get_width() / 2, h),
-            xytext=(0, 4), textcoords="offset points",
-            ha='center', va='bottom', fontsize=9, fontweight='bold',
-        )
+    for rects, cis, color_txt in [(r_a, cis_a, '#1b4f72'), (r_b, cis_b, '#4a235a')]:
+        for idx_s, (rect, (lo, hi)) in enumerate(zip(rects, cis)):
+            h = rect.get_height()
+            top_y = max(h, hi * 100.0)
+            if idx_s in (0, 1):  # S3 и >=S2: явная запись точечной оценки и 95% ДИ
+                txt = f"{format_iso_pct(h)}\n[{lo*100:.1f}–{hi*100:.1f}%]"
+            else:
+                txt = format_iso_pct(h)
+            ax.annotate(
+                txt,
+                xy=(rect.get_x() + rect.get_width() / 2, top_y),
+                xytext=(0, 5), textcoords="offset points",
+                ha='center', va='bottom', fontsize=8.6, fontweight='bold', color=color_txt,
+                bbox=dict(boxstyle='round,pad=0.15', facecolor='white', edgecolor='none', alpha=0.86),
+                zorder=8,
+            )
 
     ax.set_ylabel('Накопленная вероятность при ДТП (%)', fontsize=12, fontweight='bold')
     ax.set_title(
-        'Определение класса тяжести по правилу >10% (ISO 26262-3 / SAE J2980:2023)',
-        fontsize=13, fontweight='bold', pad=15,
+        f'Определение класса тяжести по правилу >10% — раздельные строки HARA 1.1.A и 1.1.B\n'
+        f'(Главный консервативный итог Worst-Case = max(S_A, S_B) = {s_worst}; SAE J2980:2023 §5.2.1.5(g), §5.2.2.2 Note 1)',
+        fontsize=11.8, fontweight='bold', pad=14,
     )
     ax.set_xticks(x)
     ax.set_xticklabels(steps, fontsize=10, fontweight='bold')
-    ax.set_ylim(0, 120)
+    ax.set_ylim(0, 122)
     ax.grid(axis='y', linestyle=':', alpha=0.6)
-    ax.legend(loc='upper left', frameon=True, fontsize=9.5)
+    ax.legend(loc='upper left', frameon=True, fontsize=8.8)
     plt.tight_layout()
     plot2_path = os.path.join(plots_dir, "02_cumulative_iso_decision.png")
     safe_savefig(plot2_path, dpi=300, bbox_inches='tight')
@@ -342,71 +412,92 @@ def plot_ditch_phase_portrait(records: list[dict], plots_dir: str) -> str:
     n_ditch_b = sum(1 for pt in ditch_points if pt['subclass'] == SUBCLASS_B)
     n_ditch_a_cross = sum(1 for pt in ditch_points if pt['subclass'] == SUBCLASS_A)
 
-    # --- ПАНЕЛЬ А: Механизм 1 (Soil-Trip Rollover, Вариант B: V_dep vs beta) ---
+    # --- ПАНЕЛЬ А: Механизм 1 (Soil-Trip Rollover: чистый Cooperrider без полки 15°, V_dep vs beta) ---
     max_v_dep_a = max([pt['departure_speed_mps'] or 0.0 for pt in ditch_points] + [30.0])
     x_max_a = max(32.0, max_v_dep_a * 1.05)
     max_beta = max([pt['sideslip_angle_deg'] or 0.0 for pt in ditch_points] + [0.0])
     y_max_a = max(42.0, max_beta * 1.12)
 
-    xs_grid = np.linspace(0.0, x_max_a, 400)
-    v_trip_flat = 5.5 / math.sin(math.radians(15.0))
+    xs_grid = np.linspace(0.0, x_max_a, 500)
+
+    def _s1_lower_beta(v_arr):
+        beta_s1_lat = np.degrees(
+            np.arcsin(np.minimum(1.0, DITCH_S1_SKID_VLAT_MPS / np.maximum(v_arr, DITCH_S1_SKID_VLAT_MPS)))
+        )
+        return np.where(
+            v_arr <= DITCH_VDEP_TRACKING_MIN_MPS,
+            DITCH_NON_TRACKING_BETA_DEG,
+            np.minimum(DITCH_NON_TRACKING_BETA_DEG, beta_s1_lat),
+        )
 
     def _s2_lower_beta(v_arr):
-        beta_trip = np.degrees(np.arcsin(np.minimum(1.0, 5.5 / np.maximum(v_arr, 5.5))))
+        beta_trip = np.degrees(
+            np.arcsin(np.minimum(1.0, DITCH_S2_TRIP_VLAT_MPS / np.maximum(v_arr, DITCH_S2_TRIP_VLAT_MPS)))
+        )
         return np.where(
-            v_arr <= 11.0, y_max_a,
+            v_arr <= DITCH_S2_SKID_VDEP_MPS, y_max_a,
             np.where(
-                v_arr <= 14.0, 20.0,
-                np.minimum(20.0, np.maximum(15.0, beta_trip)),
+                v_arr <= DITCH_S2_TRIP_VDEP_MPS, DITCH_S2_SKID_BETA_DEG,
+                np.minimum(DITCH_S2_SKID_BETA_DEG, beta_trip),
             ),
         )
 
+    ys_s1_lo = _s1_lower_beta(xs_grid)
     ys_s2_lo = _s2_lower_beta(xs_grid)
-    ys_s3_lo = np.where(xs_grid > 18.0, 25.0, y_max_a)
+    ys_s3_lo = np.where(xs_grid > DITCH_S3_SKID_VDEP_MPS, DITCH_S3_SKID_BETA_DEG, y_max_a)
 
-    ax_trip.fill_between(xs_grid, 0.0, 15.0, color='#2ecc71', alpha=0.09, label='S0/S1 (без срыва, β < 15°)')
-    s1_mask = (ys_s2_lo > 15.0)
     ax_trip.fill_between(
-        xs_grid, 15.0, np.minimum(ys_s2_lo, y_max_a), where=s1_mask,
-        color='#f1c40f', alpha=0.18,
-        label='S1: Занос без опрокидывания (β ≥ 15° вне зоны S2)',
+        xs_grid, 0.0, ys_s1_lo, color='#2ecc71', alpha=0.09,
+        label=f'S0/S1 (без срыва: β < {DITCH_NON_TRACKING_BETA_DEG:.0f}° и V_lat ≤ {DITCH_S1_SKID_VLAT_MPS:.1f} м/с)',
     )
-    s2_mask = (xs_grid > 11.0) & (ys_s3_lo > ys_s2_lo)
+    s1_mask = (ys_s2_lo > ys_s1_lo)
+    ax_trip.fill_between(
+        xs_grid, ys_s1_lo, np.minimum(ys_s2_lo, y_max_a), where=s1_mask,
+        color='#f1c40f', alpha=0.18,
+        label=f'S1: Занос / скольжение без опрокидывания (β ≥ {DITCH_NON_TRACKING_BETA_DEG:.0f}° или V_lat > {DITCH_S1_SKID_VLAT_MPS:.1f})',
+    )
+    s2_mask = (xs_grid > DITCH_S2_SKID_VDEP_MPS) & (ys_s3_lo > ys_s2_lo)
     ax_trip.fill_between(
         xs_grid, ys_s2_lo, ys_s3_lo, where=s2_mask,
         color='#e67e22', alpha=0.22,
-        label='S2: Soil-Trip (V_dep>14, β≥15°, V_lat>5.5) и срыв β≥20° (V_dep>11)',
+        label=(
+            f'S2: Cooperrider (V_dep>{DITCH_S2_TRIP_VDEP_MPS:.0f}, V_lat>{DITCH_S2_TRIP_VLAT_MPS:.1f}) '
+            f'и срыв β≥{DITCH_S2_SKID_BETA_DEG:.0f}° (V_dep>{DITCH_S2_SKID_VDEP_MPS:.0f})'
+        ),
     )
     ax_trip.fill_between(
-        xs_grid, 25.0, y_max_a, where=(xs_grid > 18.0),
+        xs_grid, DITCH_S3_SKID_BETA_DEG, y_max_a, where=(xs_grid > DITCH_S3_SKID_VDEP_MPS),
         color='#e74c3c', alpha=0.22,
-        label='S3: Тяжёлый срыв (V_dep>18, β≥25° или β≥20° & ω_z>45°/с)',
+        label=(
+            f'S3: Тяжёлый срыв (V_dep>{DITCH_S3_SKID_VDEP_MPS:.0f}, β≥{DITCH_S3_SKID_BETA_DEG:.0f}° '
+            f'или β≥{DITCH_S3_SPIN_BETA_DEG:.0f}° & ω_z>{DITCH_S3_SPIN_OMEGA_Z_DEG_S:.0f}°/с)'
+        ),
     )
 
-    ax_trip.axhline(15.0, color='#b7950b', linestyle=':', linewidth=1.2)
-    ax_trip.hlines(20.0, 11.0, x_max_a, color='#d35400', linestyle='--', linewidth=1.2)
-    ax_trip.hlines(25.0, 18.0, x_max_a, color='#c0392b', linestyle='-', linewidth=1.5)
-    ax_trip.vlines(11.0, 20.0, y_max_a, color='#d35400', linestyle='--', linewidth=1.1)
-    ax_trip.vlines(14.0, 15.0, y_max_a, color='#d35400', linestyle=':', linewidth=1.0, alpha=0.75)
-    ax_trip.vlines(18.0, 25.0, y_max_a, color='#c0392b', linestyle='--', linewidth=1.2)
+    ax_trip.plot(xs_grid, ys_s1_lo, color='#b7950b', linestyle=':', linewidth=1.2)
+    ax_trip.hlines(DITCH_S2_SKID_BETA_DEG, DITCH_S2_SKID_VDEP_MPS, x_max_a, color='#d35400', linestyle='--', linewidth=1.1, alpha=0.75)
+    ax_trip.hlines(DITCH_S3_SKID_BETA_DEG, DITCH_S3_SKID_VDEP_MPS, x_max_a, color='#c0392b', linestyle='-', linewidth=1.5)
+    ax_trip.vlines(DITCH_S2_SKID_VDEP_MPS, DITCH_S2_SKID_BETA_DEG, y_max_a, color='#d35400', linestyle='--', linewidth=1.1)
+    ax_trip.vlines(DITCH_S2_TRIP_VDEP_MPS, float(_s2_lower_beta(np.array([DITCH_S2_TRIP_VDEP_MPS]))[0]), y_max_a, color='#d35400', linestyle=':', linewidth=1.0, alpha=0.7)
+    ax_trip.vlines(DITCH_S3_SKID_VDEP_MPS, DITCH_S3_SKID_BETA_DEG, y_max_a, color='#c0392b', linestyle='--', linewidth=1.2)
 
-    xs_coop = np.linspace(14.0, v_trip_flat, 150)
-    ys_coop = np.degrees(np.arcsin(np.minimum(1.0, 5.5 / xs_coop)))
+    xs_coop = np.linspace(DITCH_S2_TRIP_VDEP_MPS, x_max_a, 240)
+    ys_coop = np.degrees(np.arcsin(np.minimum(1.0, DITCH_S2_TRIP_VLAT_MPS / xs_coop)))
     ax_trip.plot(
-        xs_coop, ys_coop, color='#a04000', linestyle='-', linewidth=2.0, zorder=6,
-        label='Кривая Cooperrider: β = arcsin(5.5 / V_dep) → 15° при V_dep≥21.25',
+        xs_coop, ys_coop, color='#a04000', linestyle='-', linewidth=2.1, zorder=6,
+        label=f'Кривая Cooperrider: β = arcsin({DITCH_S2_TRIP_VLAT_MPS:.1f} / V_dep) (без полки 15°)',
     )
-    ax_trip.plot([v_trip_flat, x_max_a], [15.0, 15.0], color='#a04000', linestyle='-', linewidth=2.0, zorder=6)
 
-    ax_trip.text(0.6, 15.6, 'β = 15° (S1)', color='#7d6608', fontsize=7.5, ha='left')
-    ax_trip.text(x_max_a - 0.5, 20.6, 'β = 20° (S2: V_dep > 11 м/с)', color='#a04000', fontsize=7.5, ha='right')
-    ax_trip.text(x_max_a - 0.5, 25.6, 'β = 25° (S3: V_dep > 18 м/с)', color='#922b21', fontsize=7.5, ha='right', fontweight='bold')
-    ax_trip.text(11.2, 39.0, '11 м/с', color='#a04000', fontsize=7.5, rotation=90, va='bottom')
-    ax_trip.text(18.2, 39.0, '18 м/с', color='#c0392b', fontsize=7.5, rotation=90, va='bottom')
+    beta_at_100 = math.degrees(math.asin(DITCH_S2_TRIP_VLAT_MPS / (100.0 / 3.6)))
+    ax_trip.text(0.6, DITCH_NON_TRACKING_BETA_DEG + 0.6, 'β = 15° (S1)', color='#7d6608', fontsize=7.5, ha='left')
+    ax_trip.text(x_max_a - 0.5, DITCH_S2_SKID_BETA_DEG + 0.6, 'β = 20° (S2: V_dep > 11 м/с)', color='#a04000', fontsize=7.5, ha='right')
+    ax_trip.text(x_max_a - 0.5, DITCH_S3_SKID_BETA_DEG + 0.6, 'β = 25° (S3: V_dep > 18 м/с)', color='#922b21', fontsize=7.5, ha='right', fontweight='bold')
+    ax_trip.text(DITCH_S2_SKID_VDEP_MPS + 0.2, 39.0, '11 м/с', color='#a04000', fontsize=7.5, rotation=90, va='bottom')
+    ax_trip.text(DITCH_S3_SKID_VDEP_MPS + 0.2, 39.0, '18 м/с', color='#c0392b', fontsize=7.5, rotation=90, va='bottom')
     ax_trip.annotate(
-        'Cooperrider: 21.25 м/с → 15°',
-        xy=(v_trip_flat, 15.0),
-        xytext=(15.0, 10.6),
+        f'Cooperrider: V_lat = {DITCH_S2_TRIP_VLAT_MPS:.1f} м/с\n({beta_at_100:.1f}° при 100 км/ч)',
+        xy=(100.0 / 3.6, beta_at_100),
+        xytext=(16.5, 8.2),
         ha='center', va='center', fontsize=7.2, color='#a04000', fontweight='bold',
         arrowprops=dict(arrowstyle='->', color='#a04000', lw=0.9),
     )
@@ -444,41 +535,41 @@ def plot_ditch_phase_portrait(records: list[dict], plots_dir: str) -> str:
     ax_trip.set_xlim(0, x_max_a)
     ax_trip.set_ylim(0, y_max_a)
     ax_trip.grid(True, linestyle=':', alpha=0.5)
-    ax_trip.legend(loc='upper right', frameon=True, fontsize=7.3)
+    ax_trip.legend(loc='upper right', frameon=True, fontsize=7.1)
 
-    # --- ПАНЕЛЬ Б: Механизм 2 (Nose-In / Bottom Impact) ---
+    # --- ПАНЕЛЬ Б: Механизм 2 (Nose-In / Bottom Impact: пороги V_perp = 2 / 12 / 18 м/с) ---
     x_max_b = x_max_a
     max_v_perp = max([pt['road_perp_speed_mps'] or 0.0 for pt in ditch_points] + [0.0])
-    y_max_b = max(18.5, max_v_perp * 1.28)
+    y_max_b = max(DITCH_S3_NOSE_VPERP_MPS + 4.5, max_v_perp * 1.25)
 
     ax_perp.fill_between(
-        [8.0, x_max_b], 12.0, y_max_b, color='#e74c3c', alpha=0.20,
-        label='S3: Влет в дно кювета (Severe Nose-In, V⊥ > 12 м/с)',
+        [DITCH_VDEP_TRACKING_MIN_MPS, x_max_b], DITCH_S3_NOSE_VPERP_MPS, y_max_b, color='#e74c3c', alpha=0.20,
+        label=f'S3: Крутой влёт в дно (Severe Nose-In, V⊥ > {DITCH_S3_NOSE_VPERP_MPS:.0f} м/с)',
     )
     ax_perp.fill_between(
-        [8.0, x_max_b], 8.0, 12.0, color='#e67e22', alpha=0.20,
-        label='S2: Жесткий удар подрамником (Bottom Impact, 8 < V⊥ ≤ 12 м/с)',
+        [DITCH_VDEP_TRACKING_MIN_MPS, x_max_b], DITCH_S2_BOTTOM_VPERP_MPS, DITCH_S3_NOSE_VPERP_MPS, color='#e67e22', alpha=0.20,
+        label=f'S2: Выход за предел AASHTO RDG (Bottom Impact, {DITCH_S2_BOTTOM_VPERP_MPS:.0f} < V⊥ ≤ {DITCH_S3_NOSE_VPERP_MPS:.0f} м/с)',
     )
     ax_perp.fill_between(
-        [8.0, x_max_b], 2.0, 8.0, color='#f1c40f', alpha=0.18,
-        label='S1: Преодолимый съезд по откосу (Traversable, 2 < V⊥ ≤ 8 м/с)',
+        [DITCH_VDEP_TRACKING_MIN_MPS, x_max_b], DITCH_S1_TRACKING_VPERP_MPS, DITCH_S2_BOTTOM_VPERP_MPS, color='#f1c40f', alpha=0.18,
+        label=f'S1: Проходимый съезд (Traversable, {DITCH_S1_TRACKING_VPERP_MPS:.0f} < V⊥ ≤ {DITCH_S2_BOTTOM_VPERP_MPS:.0f} м/с; RDG ≤ 11.34)',
     )
-    ax_perp.fill_between([0.0, 8.0], 2.0, y_max_b, color='#2ecc71', alpha=0.10)
+    ax_perp.fill_between([0.0, DITCH_VDEP_TRACKING_MIN_MPS], DITCH_S1_TRACKING_VPERP_MPS, y_max_b, color='#2ecc71', alpha=0.10)
     ax_perp.fill_between(
-        [0.0, x_max_b], 0.0, 2.0, color='#2ecc71', alpha=0.10,
-        label='S0: Касательный / низкоскоростной съезд (V⊥ ≤ 2 м/с или V_dep ≤ 8 м/с)',
+        [0.0, x_max_b], 0.0, DITCH_S1_TRACKING_VPERP_MPS, color='#2ecc71', alpha=0.10,
+        label=f'S0: Касательный / низкоскоростной съезд (V⊥ ≤ {DITCH_S1_TRACKING_VPERP_MPS:.0f} м/с или V_dep ≤ {DITCH_VDEP_TRACKING_MIN_MPS:.0f} м/с)',
     )
 
-    ax_perp.axhline(12.0, color='#c0392b', linestyle='--', linewidth=1.2)
-    ax_perp.axhline(8.0, color='#d35400', linestyle='--', linewidth=1.2)
-    ax_perp.axhline(2.0, color='#b7950b', linestyle='--', linewidth=1.2)
-    ax_perp.axvline(8.0, color='#27ae60', linestyle=':', linewidth=1.2)
+    ax_perp.axhline(DITCH_S3_NOSE_VPERP_MPS, color='#c0392b', linestyle='--', linewidth=1.3)
+    ax_perp.axhline(DITCH_S2_BOTTOM_VPERP_MPS, color='#d35400', linestyle='--', linewidth=1.3)
+    ax_perp.axhline(DITCH_S1_TRACKING_VPERP_MPS, color='#b7950b', linestyle='--', linewidth=1.2)
+    ax_perp.axvline(DITCH_VDEP_TRACKING_MIN_MPS, color='#27ae60', linestyle=':', linewidth=1.2)
 
-    ax_perp.text(x_max_b - 0.5, 12.25, 'Порог S3: V⊥ = 12.0 м/с', color='#c0392b', fontsize=8, ha='right')
-    ax_perp.text(0.6, 8.25, 'Порог S2: V⊥ = 8.0 м/с', color='#d35400', fontsize=8, ha='left')
-    ax_perp.text(0.6, 2.25, 'Порог S1: V⊥ = 2.0 м/с', color='#b7950b', fontsize=8, ha='left')
-    ax_perp.text(8.2, 0.4, 'V_dep = 8.0 м/с', color='#27ae60', fontsize=8, rotation=90)
-    ax_perp.text(4.0, 10.0, 'S0: V_dep ≤ 8 м/с', color='#1e8449', fontsize=8, ha='center', va='center', fontweight='bold')
+    ax_perp.text(x_max_b - 0.5, DITCH_S3_NOSE_VPERP_MPS + 0.35, f'Порог S3: V⊥ = {DITCH_S3_NOSE_VPERP_MPS:.1f} м/с', color='#c0392b', fontsize=8, ha='right', fontweight='bold')
+    ax_perp.text(x_max_b - 0.5, DITCH_S2_BOTTOM_VPERP_MPS + 0.35, f'Порог S2: V⊥ = {DITCH_S2_BOTTOM_VPERP_MPS:.1f} м/с', color='#d35400', fontsize=8, ha='right', fontweight='bold')
+    ax_perp.text(0.6, DITCH_S1_TRACKING_VPERP_MPS + 0.30, f'Порог S1: V⊥ = {DITCH_S1_TRACKING_VPERP_MPS:.1f} м/с', color='#b7950b', fontsize=8, ha='left')
+    ax_perp.text(DITCH_VDEP_TRACKING_MIN_MPS + 0.2, 0.4, f'V_dep = {DITCH_VDEP_TRACKING_MIN_MPS:.1f} м/с', color='#27ae60', fontsize=8, rotation=90)
+    ax_perp.text(4.0, 9.0, f'S0: V_dep ≤ {DITCH_VDEP_TRACKING_MIN_MPS:.0f} м/с', color='#1e8449', fontsize=8, ha='center', va='center', fontweight='bold')
 
     for pt in ditch_points:
         v_dep = pt['departure_speed_mps']
@@ -531,27 +622,37 @@ def plot_ditch_phase_portrait(records: list[dict], plots_dir: str) -> str:
 
 
 def plot_subclass_a_dv_cascade(records: list[dict], plots_dir: str) -> str:
-    """График 4: 04_subclass_a_dv_cascade.png — каскад скоростей в Подклассе А строго по ДТП."""
+    """
+    График 4: 04_subclass_a_dv_cascade.png — каскад скоростей в Подклассе А строго по ДТП.
+    Адаптивный режим подписей и тиков оси X для малых (n<=45), средних (n~100) и больших (n>=200) выборок.
+    """
     sub_a_crashes = [r for r in records if r['subclass'] == SUBCLASS_A and is_crash_run(r)]
-    fig, (ax_tt, ax_bar) = plt.subplots(2, 1, figsize=(15, 8.5), dpi=300, sharex=True)
+    n_crashes = len(sub_a_crashes)
+    fig, (ax_tt, ax_bar) = plt.subplots(2, 1, figsize=(16.0 if n_crashes > 110 else 15.0, 8.8), dpi=300, sharex=True)
 
     if sub_a_crashes:
-        indices = np.arange(len(sub_a_crashes))
+        indices = np.arange(n_crashes)
         dv_ego = [r['delta_v_ego_mps'] if r['delta_v_ego_mps'] is not None else 0.0 for r in sub_a_crashes]
         dv_target = [r['delta_v_target_mps'] if r['delta_v_target_mps'] is not None else 0.0 for r in sub_a_crashes]
         v_barrier = [r['barrier_impact_mps'] if r['barrier_impact_mps'] is not None else 0.0 for r in sub_a_crashes]
+        dv_max_per_run = [max(e, t) for e, t in zip(dv_ego, dv_target)]
+
+        dense_mode = n_crashes > 45
+        very_dense = n_crashes > 110
+        edge_lw_tt = 0.25 if very_dense else (0.45 if dense_mode else 0.7)
+        edge_lw_bar = 0.28 if very_dense else (0.50 if dense_mode else 0.8)
 
         # --- ВЕРХНЯЯ ПАНЕЛЬ: Первичный удар ТС-ТС ---
-        w_tt = 0.35
+        w_tt = 0.42 if very_dense else 0.35
         ax_tt.bar(
             indices - w_tt / 2, dv_ego, w_tt,
             label='Delta-V Ego (Chevrolet Impala, 3490 кг)',
-            color='#5dade2', edgecolor='black', linewidth=0.7,
+            color='#5dade2', edgecolor='#1b4f72' if very_dense else 'black', linewidth=edge_lw_tt,
         )
         ax_tt.bar(
             indices + w_tt / 2, dv_target, w_tt,
             label='Delta-V Target (Seat Leon, var. mass)',
-            color='#2471a3', edgecolor='black', linewidth=0.7,
+            color='#2471a3', edgecolor='#154360' if very_dense else 'black', linewidth=edge_lw_tt,
         )
 
         ax_tt.axhline(8.0, color='#c0392b', linestyle='--', linewidth=1.2, label='Порог S3 бокового удара (8.0 м/с)')
@@ -559,20 +660,58 @@ def plot_subclass_a_dv_cascade(records: list[dict], plots_dir: str) -> str:
         ax_tt.axhline(1.0, color='#f39c12', linestyle='--', linewidth=1.2, label='Порог S1 бокового удара (1.0 м/с)')
 
         max_dv = max(dv_ego + dv_target + [8.0])
-        ax_tt.set_ylim(0, max(10.5, max_dv * 1.35))
-        for idx, r in enumerate(sub_a_crashes):
-            top_val = max(dv_ego[idx], dv_target[idx])
-            s_primary = r['sev_side']
-            if top_val > 0:
+        ax_tt.set_ylim(0, max(10.5, max_dv * 1.32))
+
+        if not dense_mode:
+            for idx, r in enumerate(sub_a_crashes):
+                top_val = dv_max_per_run[idx]
+                s_primary = r['sev_side']
+                if top_val > 0:
+                    ax_tt.annotate(
+                        f"{top_val:.1f} ({s_primary})",
+                        xy=(idx, top_val), xytext=(0, 4), textcoords="offset points",
+                        ha='center', va='bottom', fontsize=7.0, fontweight='bold', color='#1b4f72', rotation=90,
+                    )
+        else:
+            # Адаптивная разметка: выделяем все S2/S3 и глобальный максимум Delta-V без наложения
+            max_dv_idx = int(np.argmax(dv_max_per_run))
+            notable_tt = [
+                i for i, r in enumerate(sub_a_crashes)
+                if r.get('sev_side') in ('S2', 'S3') or i == max_dv_idx
+            ]
+            last_x_tt = -999
+            min_gap_tt = max(4, n_crashes // 28)
+            for idx in notable_tt:
+                r = sub_a_crashes[idx]
+                top_val = dv_max_per_run[idx]
+                if top_val <= 0:
+                    continue
+                y_off = 22 if (idx - last_x_tt) < min_gap_tt else 12
+                last_x_tt = idx
                 ax_tt.annotate(
-                    f"{top_val:.1f} ({s_primary})",
-                    xy=(idx, top_val), xytext=(0, 4), textcoords="offset points",
-                    ha='center', va='bottom', fontsize=7.0, fontweight='bold', color='#1b4f72', rotation=90,
+                    f"#{r['run_id']}: {top_val:.2f} м/с ({r['sev_side']})",
+                    xy=(idx, top_val), xytext=(0, y_off), textcoords="offset points",
+                    ha='center', va='bottom', fontsize=8.0, fontweight='bold', color='#1b4f72',
+                    bbox=dict(boxstyle='round,pad=0.18', facecolor='white', edgecolor='#2471a3', alpha=0.88, lw=0.7),
+                    arrowprops=dict(arrowstyle='->', color='#2471a3', lw=0.8),
+                )
+            nz_dv = [v for v in dv_max_per_run if v > 0]
+            if nz_dv:
+                s_cnt_tt = {s: sum(1 for r in sub_a_crashes if r.get('sev_side') == s) for s in SEVERITY_CLASSES}
+                badge_tt = (
+                    f"Сводка ΔV (n={n_crashes}): мед. {np.median(nz_dv):.2f}, P90 {np.percentile(nz_dv, 90):.2f}, "
+                    f"макс. {max(nz_dv):.2f} м/с (#{sub_a_crashes[max_dv_idx]['run_id']})\n"
+                    f"Классы S_side: S0={s_cnt_tt['S0']}, S1={s_cnt_tt['S1']}, S2={s_cnt_tt['S2']}, S3={s_cnt_tt['S3']}"
+                )
+                ax_tt.text(
+                    0.012, 0.94, badge_tt, transform=ax_tt.transAxes,
+                    ha='left', va='top', fontsize=8.3, color='#1b4f72',
+                    bbox=dict(boxstyle='round,pad=0.35', facecolor='#f8f9f9', edgecolor='#85c1e9', alpha=0.92),
                 )
 
         ax_tt.set_ylabel('Delta-V ТС-ТС [м/с]', fontsize=11, fontweight='bold')
         ax_tt.set_title(
-            f'А. Первичный боковой удар между автомобилями на полосе (n = {len(sub_a_crashes)})',
+            f'А. Первичный боковой удар между автомобилями на полосе (n = {n_crashes})',
             fontsize=12, fontweight='bold',
         )
         ax_tt.grid(axis='y', linestyle=':', alpha=0.6)
@@ -580,10 +719,10 @@ def plot_subclass_a_dv_cascade(records: list[dict], plots_dir: str) -> str:
 
         # --- НИЖНЯЯ ПАНЕЛЬ: Вторичный удар об ограждение ---
         bar_colors = [SEVERITY_COLORS.get(r['sev_barrier'], '#2ecc71') for r in sub_a_crashes]
-        is_ditch_s2_flags = [(r.get('severity') == 'S2' and r.get('sev_barrier') != 'S2') for r in sub_a_crashes]
-        bar_edges = ['#d35400' if flag else 'black' for flag in is_ditch_s2_flags]
-        bar_lws = [2.0 if flag else 0.8 for flag in is_ditch_s2_flags]
-        w_b = 0.55
+        is_ditch_s2_flags = [(r.get('severity') in ('S2', 'S3') and r.get('sev_barrier') not in ('S2', 'S3')) for r in sub_a_crashes]
+        bar_edges = ['#d35400' if flag else ('#566573' if very_dense else 'black') for flag in is_ditch_s2_flags]
+        bar_lws = [1.8 if flag else edge_lw_bar for flag in is_ditch_s2_flags]
+        w_b = 0.72 if very_dense else 0.55
         ax_bar.bar(
             indices, v_barrier, w_b, color=bar_colors, edgecolor=bar_edges, linewidth=bar_lws,
             label='Скорость удара V_barrier (цвет по классу sev_barrier)',
@@ -596,40 +735,128 @@ def plot_subclass_a_dv_cascade(records: list[dict], plots_dir: str) -> str:
 
         short_actor_map = {'target': 'T', 'ego': 'E', 'both': 'B', 'none': 'None'}
         has_ditch_s2_override = any(is_ditch_s2_flags)
-        for idx, r in enumerate(sub_a_crashes):
-            v_b = v_barrier[idx]
-            is_ditch_override = is_ditch_s2_flags[idx]
-            if is_valid_barrier_hit(r) and v_b > 0.01:
-                act = str(r['barrier_collision_actor']).lower()
-                short_actor = short_actor_map.get(act, r['barrier_collision_actor'])
-                itype = 'SS' if r['barrier_impact_type'] == 'Side-swipe' else 'FR'
-                sev_b = r['sev_barrier']
-                txt = f"{v_b:.1f} м/с ({sev_b}, {itype}-{short_actor})"
-                if is_ditch_override:
-                    txt += " [S2: кювет]"
+
+        if not dense_mode:
+            for idx, r in enumerate(sub_a_crashes):
+                v_b = v_barrier[idx]
+                is_ditch_override = is_ditch_s2_flags[idx]
+                if is_valid_barrier_hit(r) and v_b > 0.01:
+                    act = str(r['barrier_collision_actor']).lower()
+                    short_actor = short_actor_map.get(act, r['barrier_collision_actor'])
+                    itype = 'SS' if r['barrier_impact_type'] == 'Side-swipe' else 'FR'
+                    sev_b = r['sev_barrier']
+                    txt = f"{v_b:.1f} м/с ({sev_b}, {itype}-{short_actor})"
+                    if is_ditch_override:
+                        txt += f" [{r['severity']}: кювет]"
+                    ax_bar.annotate(
+                        txt, xy=(idx, v_b), xytext=(0, 5), textcoords="offset points",
+                        ha='center', va='bottom', fontsize=7.5, fontweight='bold',
+                        color='#d35400' if is_ditch_override else '#2c3e50', rotation=90,
+                    )
+                elif is_ditch_override:
+                    ax_bar.annotate(
+                        f"0.0 м/с [{r['severity']}: кювет]", xy=(idx, 0.0), xytext=(0, 6), textcoords="offset points",
+                        ha='center', va='bottom', fontsize=7.5, fontweight='bold',
+                        color='#d35400', rotation=90,
+                    )
+        else:
+            # Адаптивная разметка: подписываем все S2/S3, перекрёстные кювет-оверрайды и Top-3 пика V_barrier
+            valid_bar_indices = [i for i, r in enumerate(sub_a_crashes) if is_valid_barrier_hit(r) and v_barrier[i] > 0.01]
+            top_peak_indices = sorted(valid_bar_indices, key=lambda i: v_barrier[i], reverse=True)[:3]
+            notable_set = set(top_peak_indices)
+            for i, r in enumerate(sub_a_crashes):
+                if r.get('sev_barrier') in ('S2', 'S3') or is_ditch_s2_flags[i]:
+                    notable_set.add(i)
+            notable_bar = sorted(notable_set)
+
+            # Разведение близких выносок по вертикали и горизонтали
+            min_gap_b = max(16, n_crashes // 7)
+            placed_bar = []
+            for idx in notable_bar:
+                r = sub_a_crashes[idx]
+                v_b = v_barrier[idx]
+                is_ditch_override = is_ditch_s2_flags[idx]
+                if is_valid_barrier_hit(r) and v_b > 0.01:
+                    act = str(r['barrier_collision_actor']).lower()
+                    short_actor = short_actor_map.get(act, r['barrier_collision_actor'])
+                    itype = 'SS' if r['barrier_impact_type'] == 'Side-swipe' else 'FR'
+                    txt = f"#{r['run_id']}: {v_b:.2f} м/с ({r['sev_barrier']}, {itype}-{short_actor})"
+                    if is_ditch_override:
+                        txt += f" [{r['severity']}: кювет]"
+                else:
+                    txt = f"#{r['run_id']}: 0.0 м/с [{r['severity']}: кювет]"
+
+                level = 0
+                for prev_idx, prev_lvl in placed_bar:
+                    if abs(idx - prev_idx) < min_gap_b and prev_lvl == level:
+                        level += 1
+                placed_bar.append((idx, level))
+                y_off = 14 + level * 22
+                x_off = 0
+                if idx < n_crashes * 0.08:
+                    ha = 'left'
+                    x_off = 4
+                elif idx > n_crashes * 0.92:
+                    ha = 'right'
+                    x_off = -4
+                else:
+                    ha = 'center'
+
+                is_high = r.get('sev_barrier') in ('S2', 'S3') or is_ditch_override
                 ax_bar.annotate(
-                    txt, xy=(idx, v_b), xytext=(0, 5), textcoords="offset points",
-                    ha='center', va='bottom', fontsize=7.5, fontweight='bold',
-                    color='#d35400' if is_ditch_override else '#2c3e50', rotation=90,
+                    txt,
+                    xy=(idx, v_b), xytext=(x_off, y_off), textcoords="offset points",
+                    ha=ha, va='bottom', fontsize=7.8, fontweight='bold',
+                    color='#c0392b' if is_high else '#2c3e50',
+                    bbox=dict(
+                        boxstyle='round,pad=0.18', facecolor='white',
+                        edgecolor='#d35400' if is_high else '#7f8c8d', alpha=0.90, lw=0.8,
+                    ),
+                    arrowprops=dict(arrowstyle='->', color='#d35400' if is_high else '#566573', lw=0.8),
                 )
-            elif is_ditch_override:
-                ax_bar.annotate(
-                    "0.0 м/с [S2: кювет]", xy=(idx, 0.0), xytext=(0, 6), textcoords="offset points",
-                    ha='center', va='bottom', fontsize=7.5, fontweight='bold',
-                    color='#d35400', rotation=90,
+
+            if valid_bar_indices:
+                vb_vals = [v_barrier[i] for i in valid_bar_indices]
+                max_vb_idx = max(valid_bar_indices, key=lambda i: v_barrier[i])
+                s_cnt_b = {s: sum(1 for r in sub_a_crashes if r.get('sev_barrier') == s) for s in SEVERITY_CLASSES}
+                badge_bar = (
+                    f"Удары о барьер: {len(valid_bar_indices)}/{n_crashes} | мед. {np.median(vb_vals):.2f}, "
+                    f"P90 {np.percentile(vb_vals, 90):.2f}, макс. {v_barrier[max_vb_idx]:.2f} м/с (#{sub_a_crashes[max_vb_idx]['run_id']})\n"
+                    f"Классы S_barrier: S0={s_cnt_b['S0']}, S1={s_cnt_b['S1']}, S2={s_cnt_b['S2']}, S3={s_cnt_b['S3']}"
+                )
+                ax_bar.text(
+                    0.012, 0.94, badge_bar, transform=ax_bar.transAxes,
+                    ha='left', va='top', fontsize=8.3, color='#2c3e50',
+                    bbox=dict(boxstyle='round,pad=0.35', facecolor='#f8f9f9', edgecolor='#aeb6bf', alpha=0.92),
                 )
 
         max_v_b = max(v_barrier + [18.0])
         ax_bar.set_ylim(0, max(24.0, max_v_b * 1.45))
 
-        ax_bar.set_xlabel(f'Номер прогона с ДТП в Подклассе А (n = {len(sub_a_crashes)})', fontsize=11, fontweight='bold')
+        ax_bar.set_xlabel(f'Номер прогона с ДТП в Подклассе А (n = {n_crashes})', fontsize=11, fontweight='bold')
         ax_bar.set_ylabel('Скорость удара V_barrier [м/с]', fontsize=11, fontweight='bold')
         ax_bar.set_title(
-            f'Б. Вторичный удар о жёсткое ограждение с учетом угла удара (n = {len(sub_a_crashes)})',
+            f'Б. Вторичный удар о жёсткое ограждение с учетом угла удара (n = {n_crashes})',
             fontsize=12, fontweight='bold',
         )
-        ax_bar.set_xticks(indices)
-        ax_bar.set_xticklabels([f"#{r['run_id']}" for r in sub_a_crashes], fontsize=7.5, fontweight='bold', rotation=90)
+
+        # Адаптивные метки оси X без наслоения
+        if not dense_mode:
+            tick_positions = indices
+            tick_labels = [f"#{r['run_id']}" for r in sub_a_crashes]
+            tick_fs = 7.5
+            tick_rot = 90
+        else:
+            step = 5 if not very_dense else max(5, int(math.ceil(n_crashes / 25.0 / 5.0)) * 5)
+            tick_positions = list(range(0, n_crashes, step))
+            if (n_crashes - 1) - tick_positions[-1] >= max(2, step // 2):
+                tick_positions.append(n_crashes - 1)
+            tick_labels = [f"#{sub_a_crashes[i]['run_id']}" for i in tick_positions]
+            tick_fs = 8.2
+            tick_rot = 45
+
+        ax_bar.set_xticks(tick_positions)
+        ax_bar.set_xticklabels(tick_labels, fontsize=tick_fs, fontweight='bold', rotation=tick_rot, ha='right' if tick_rot == 45 else 'center')
         ax_bar.grid(axis='y', linestyle=':', alpha=0.6)
 
         p_s0 = mpatches.Patch(facecolor=SEVERITY_COLORS['S0'], edgecolor='black', label='Удар S0')
@@ -638,7 +865,7 @@ def plot_subclass_a_dv_cascade(records: list[dict], plots_dir: str) -> str:
         p_s3 = mpatches.Patch(facecolor=SEVERITY_COLORS['S3'], edgecolor='black', label='Удар S3')
         p_ditch_s2 = mpatches.Patch(
             facecolor='white', edgecolor='#d35400', linewidth=2.0,
-            label='S2: кювет (перекрёстный уход при sev_barrier≠S2)',
+            label='S2/S3: кювет (перекрёстный уход при sev_barrier<S2)',
         )
         p_actors = mpatches.Patch(facecolor='none', edgecolor='none', label='Участники: T (Target, var. mass), E (Ego 3490 кг), B (Both)')
         has_s0_bar = any(r.get('sev_barrier') == 'S0' for r in sub_a_crashes)
@@ -654,7 +881,7 @@ def plot_subclass_a_dv_cascade(records: list[dict], plots_dir: str) -> str:
         ax_bar.text(0.5, 0.5, 'Нет прогонов с ДТП для Подкласса А', ha='center', va='center')
 
     fig.suptitle(
-        f'Сравнение скоростей первичного и вторичного ударов (Подкласс А, n = {len(sub_a_crashes)})',
+        f'Сравнение скоростей первичного и вторичного ударов (Подкласс А, n = {n_crashes})',
         fontsize=14, fontweight='bold',
     )
     plt.tight_layout(rect=[0, 0, 1, 0.96])
@@ -695,12 +922,12 @@ def plot_kinematics_vs_severity(records: list[dict], analysis_odd: dict, plots_d
 
     r_s1 = ax_esc.bar(
         x_esc - w_esc / 2, stage1_pcts, w_esc,
-        label=f'Этап 1: Первичный боковой контакт ({w_a:.2f}·A + {w_b:.2f}·B)',
+        label=f'Этап 1: Первичный боковой контакт ({w_a:.2f}·A + {w_b:.2f}·B, справ.)',
         color='#3498db', edgecolor='black', linewidth=0.8,
     )
     r_s2 = ax_esc.bar(
         x_esc + w_esc / 2, stage2_pcts, w_esc,
-        label=f'Этап 2: Итог после ограждения / кювета ({w_a:.2f}·A + {w_b:.2f}·B)',
+        label=f'Этап 2: Итог после ограждения / кювета ({w_a:.2f}·A + {w_b:.2f}·B, справ.)',
         color='#e74c3c', edgecolor='black', linewidth=0.8,
     )
 
@@ -725,11 +952,11 @@ def plot_kinematics_vs_severity(records: list[dict], analysis_odd: dict, plots_d
         )
 
     max_esc = max(stage1_pcts + stage2_pcts + [10.0])
-    ax_esc.set_ylim(0, max_esc * 1.25)
-    ax_esc.set_ylabel(f'Взвешенная доля по ODD ({w_a:.2f}·A + {w_b:.2f}·B), %', fontsize=10.5, fontweight='bold')
+    ax_esc.set_ylim(0, max_esc * 1.28)
+    ax_esc.set_ylabel(f'Справочная взвешенная доля ODD ({w_a:.2f}·A + {w_b:.2f}·B), %', fontsize=10.2, fontweight='bold')
     ax_esc.set_title(
-        f'А. Тяжесть травм: первичный контакт vs итог ДТП\n(Взвешенный ODD: {w_a:.2f}·A + {w_b:.2f}·B, n = {n_crash})',
-        fontsize=11, fontweight='bold', pad=10,
+        f'А. Эскалация тяжести: первичный контакт vs итог ДТП\n(Справочный профиль ODD: {w_a:.2f}·A + {w_b:.2f}·B, n = {n_crash}; вердикты HARA — 1.1.A / 1.1.B)',
+        fontsize=10.4, fontweight='bold', pad=10,
     )
     ax_esc.set_xticks(x_esc)
     ax_esc.set_xticklabels(['S0 (Без травм)', 'S1 (Легкие)', 'S2 (Тяжелые)', 'S3 (Фатальные)'], fontsize=9.5, fontweight='bold')

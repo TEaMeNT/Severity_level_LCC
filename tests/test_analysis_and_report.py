@@ -57,6 +57,12 @@ def test_iso_severity_weighted_odd_controllability_and_asil():
     assert res_s3['assigned_class'] == 'S3'
     res_s2 = evaluate_iso_severity({'S0': 85, 'S1': 3, 'S2': 8, 'S3': 4}, total_crashes=100)
     assert res_s2['assigned_class'] == 'S2'
+    assert 'cum_ci_95' in res_s2
+    lo_s2, hi_s2 = res_s2['cum_ci_95']['>=S2']
+    assert 0.06 < lo_s2 < 0.12 < hi_s2 < 0.21
+    lo_s3, hi_s3 = res_s2['cum_ci_95']['S3']
+    assert lo_s3 * 100.0 == pytest.approx(1.10, abs=0.01)
+    assert hi_s3 * 100.0 == pytest.approx(9.93, abs=0.01)
     res_s1 = evaluate_iso_severity({'S0': 80, 'S1': 15, 'S2': 5, 'S3': 0}, total_crashes=100)
     assert res_s1['assigned_class'] == 'S1'
     res_s0 = evaluate_iso_severity({'S0': 92, 'S1': 8, 'S2': 0, 'S3': 0}, total_crashes=100)
@@ -87,9 +93,9 @@ def test_iso_severity_weighted_odd_controllability_and_asil():
     assert determine_asil('S3', 'E4', 'C3') == 'ASIL D'
 
 
-def test_full_analysis_exact_report_match_and_5_plots(
+def test_full_analysis_report_verdicts_ci_and_5_plots(
     baseline_csv_path: Path,
-    baseline_report_path: Path,
+    project_root: Path,
     tmp_path: Path,
 ):
     args = build_arg_parser().parse_args([
@@ -98,10 +104,22 @@ def test_full_analysis_exact_report_match_and_5_plots(
     ])
     result = run_analysis(args)
 
-    # 1. Проверка точного посимвольного совпадения summary_report.md с эталоном
+    # 1. Проверка структуры отчёта v1.1: раздельные 1.1.A / 1.1.B + Worst-Case, 95% ДИ P(>=S2), Appendix B, T_hold <= T_react
     generated_report = (tmp_path / "summary_report.md").read_text(encoding="utf-8")
-    expected_report = baseline_report_path.read_text(encoding="utf-8")
-    assert generated_report == expected_report
+    assert "SAE J2980:2023** (5.2.1.5(g), 5.2.2.2, 5.2.3, Appendix B)" in generated_report
+    assert "SAE J2980:2023** (5.2.3, Annex B)" not in generated_report
+    assert "T_{react} + T_{hold}" not in generated_report
+    assert "T_{react}+T_{hold}" not in generated_report
+    assert "T_{hold} \\le T_{react}" in generated_report
+    assert "Строка HARA `1.1.A`" in generated_report
+    assert "Строка HARA `1.1.B`" in generated_report
+    assert "WORST-CASE SUBCLASS (главный итог HARA)" in generated_report
+    assert "Взвешенный ODD (справочно" in generated_report
+    assert "95% ДИ P(≥S2" in generated_report
+    assert "информационный индикатор" in generated_report
+    assert result["analysis_a"]["assigned_class"] == "S1"
+    assert result["analysis_b"]["assigned_class"] == "S2"
+    assert result["s_worst"] == "S2"
 
     # 2. Проверка генерации всех 5 графиков PNG
     expected_plots = [
@@ -118,6 +136,49 @@ def test_full_analysis_exact_report_match_and_5_plots(
         data = p.read_bytes()
         assert len(data) > 5000
         assert data[:8] == b"\x89PNG\r\n\x1a\n"
+
+    # 3. Если присутствует 400-прогонный архив, проверяем адаптивный рендер при n = 199 (без модификации архива)
+    csv_400 = project_root / "results" / "run_400" / "lcc_hara_400.csv"
+    if csv_400.is_file():
+        out_400 = tmp_path / "out_400"
+        args_400 = build_arg_parser().parse_args([
+            "--input", str(csv_400),
+            "--output-dir", str(out_400),
+        ])
+        res_400 = run_analysis(args_400)
+        assert res_400["analysis_a"]["assigned_class"] == "S1"
+        assert res_400["analysis_b"]["assigned_class"] == "S2"
+        assert res_400["s_worst"] == "S2"
+        assert (out_400 / "plots" / "04_subclass_a_dv_cascade.png").is_file()
+        report_400 = (out_400 / "summary_report.md").read_text(encoding="utf-8")
+        # При ретро-переклассификации v1.0 CSV (max V_perp = 8.15 < 12.0) механизм ditch_mechanism тоже обновляется
+        assert "Hard Ditch Bottom Impact" not in report_400
+        assert "**Moderate Rollover Risk:** 15" in report_400
+
+
+def test_loader_recomputes_ditch_mechanism_from_kinematics(tmp_path: Path):
+    from hara_lcc.analysis.loader import load_simulation_results
+
+    csv_file = tmp_path / "legacy_v10.csv"
+    csv_file.write_text(
+        "run_id,subclass,driver_post_shock_mode,shock_duration_sec,side_collision,"
+        "delta_v_ego_mps,delta_v_target_mps,effective_side_dv_mps,sev_side,"
+        "barrier_collision,barrier_collision_actor,barrier_impact_type,barrier_impact_mps,sev_barrier,"
+        "ditch_departure_actor,departure_speed_mps,road_perp_speed_mps,encroachment_angle_deg,"
+        "vehicle_lat_skid_mps,sideslip_angle_deg,departure_yaw_rate_deg_s,ditch_mechanism,sev_ditch,"
+        "severity,scenario_outcome\n"
+        "1,SUBCLASS_B_DITCH,passive,1.0,True,1.0,2.0,2.0,S1,False,None,,0.0,S0,"
+        "both,25.0,8.15,19.0,3.0,6.9,10.0,Hard Ditch Bottom Impact,S2,S2,ok\n"
+        "2,SUBCLASS_B_DITCH,passive,1.0,True,1.0,2.0,2.0,S1,False,None,,0.0,S0,"
+        "both,24.5,6.0,14.2,5.8,13.7,18.0,Traversable Tracking Slope Departure,S1,S1,ok\n",
+        encoding="utf-8",
+    )
+    recs = load_simulation_results(str(csv_file))
+    assert len(recs) == 2
+    assert recs[0]["sev_ditch"] == "S1"
+    assert recs[0]["ditch_mechanism"] == "Traversable Tracking Slope Departure"
+    assert recs[1]["sev_ditch"] == "S2"
+    assert recs[1]["ditch_mechanism"] == "Moderate Rollover Risk"
 
 
 def test_analysis_with_active_input_renders_controllability_section(
