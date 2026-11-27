@@ -216,14 +216,15 @@ def test_crossover_ditch_supported_in_both_subclasses():
     "run_id, expected_subclass, expected_sev_side, expected_sev_barrier, expected_sev_ditch, expected_severity, expected_mech, expected_crash",
     [
         ("43",  SUBCLASS_A, "S0", "S0", "S0", "S0", "", False),
+        ("35",  SUBCLASS_A, "S1", "S1", "S2", "S2", "Moderate Rollover Risk", True),
         ("49",  SUBCLASS_A, "S1", "S2", "S1", "S2", "Traversable Tracking Slope Departure", True),
-        ("24",  SUBCLASS_A, "S0", "S1", "S2", "S2", "Moderate Rollover Risk", True),
-        ("164", SUBCLASS_B, "S1", "S0", "S1", "S1", "Traversable Tracking Slope Departure", True),
-        ("156", SUBCLASS_B, "S1", "S0", "S1", "S1", "Traversable Tracking Slope Departure", True),
-        ("200", SUBCLASS_B, "S1", "S0", "S1", "S1", "Traversable Tracking Slope Departure", True),
-        ("158", SUBCLASS_B, "S1", "S0", "S2", "S2", "Moderate Rollover Risk", True),
-        ("113", SUBCLASS_B, "S1", "S0", "S3", "S3", "High-Speed Soil-Trip Rollover", True),
-        ("116", SUBCLASS_B, "S1", "S0", "S3", "S3", "High-Speed Soil-Trip Rollover", True),
+        ("141", SUBCLASS_A, "S1", "S2", "S0", "S2", "Shallow Grazing Departure", True),
+        ("208", SUBCLASS_B, "S1", "S0", "S2", "S2", "Moderate Rollover Risk", True),
+        ("220", SUBCLASS_B, "S1", "S0", "S3", "S3", "High-Speed Soil-Trip Rollover", True),
+        ("256", SUBCLASS_B, "S1", "S0", "S3", "S3", "High-Speed Soil-Trip Rollover", True),
+        ("289", SUBCLASS_B, "S1", "S0", "S3", "S3", "High-Speed Soil-Trip Rollover", True),
+        ("303", SUBCLASS_B, "S1", "S0", "S3", "S3", "High-Speed Soil-Trip Rollover", True),
+        ("400", SUBCLASS_B, "S1", "S0", "S1", "S1", "Traversable Tracking Slope Departure", True),
     ],
 )
 def test_baseline_v1_reference_cases(
@@ -257,20 +258,22 @@ def test_baseline_v1_reference_cases(
         )
         assert SEVERITY_FROM_RANK[sev_int] == expected_sev_ditch
         assert mech == expected_mech
+        assert rec["ditch_mechanism"] == expected_mech
 
 
-def test_all_200_baseline_rows_consistent_with_updated_classifiers(baseline_csv_path: Path, baseline_records: list[dict]):
+def test_all_400_canonical_rows_consistent_with_classifiers(baseline_csv_path: Path, baseline_records: list[dict]):
     with open(baseline_csv_path, mode='r', encoding='utf-8-sig') as f:
         raw_rows = list(csv.DictReader(f))
-    assert len(raw_rows) == len(baseline_records) == 200
+    assert len(raw_rows) == len(baseline_records) == 400
 
     for raw, parsed in zip(raw_rows, baseline_records):
-        # Первичный боковой удар и барьер не менялись относительно v1.0
         assert parsed["sev_side"] == raw["sev_side"]
         assert parsed["sev_barrier"] == raw["sev_barrier"]
-        # Кювет пересчитан чистым классификатором v1.1 (V_perp 12/18 + чистый Cooperrider)
+        assert parsed["sev_ditch"] == raw["sev_ditch"]
+        assert parsed["ditch_mechanism"] == raw["ditch_mechanism"]
+        assert parsed["severity"] == raw["severity"]
         if parsed["ditch_departure_actor"] not in ("None", "") and parsed["departure_speed_mps"]:
-            sev_int, _ = classify_ditch_boundary(
+            sev_int, mech = classify_ditch_boundary(
                 v_dep=parsed["departure_speed_mps"],
                 v_perp_road=parsed["road_perp_speed_mps"],
                 v_lat_car=parsed["vehicle_lat_skid_mps"],
@@ -278,6 +281,7 @@ def test_all_200_baseline_rows_consistent_with_updated_classifiers(baseline_csv_
                 omega_z=parsed["departure_yaw_rate_deg_s"],
             )
             assert parsed["sev_ditch"] == SEVERITY_FROM_RANK[sev_int]
+            assert parsed["ditch_mechanism"] == mech
         expected_final = SEVERITY_FROM_RANK[
             max(
                 SEVERITY_RANK[parsed["sev_side"]],

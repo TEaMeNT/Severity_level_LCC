@@ -137,23 +137,10 @@ def test_full_analysis_report_verdicts_ci_and_5_plots(
         assert len(data) > 5000
         assert data[:8] == b"\x89PNG\r\n\x1a\n"
 
-    # 3. Если присутствует 400-прогонный архив, проверяем адаптивный рендер при n = 199 (без модификации архива)
-    csv_400 = project_root / "results" / "run_400" / "lcc_hara_400.csv"
-    if csv_400.is_file():
-        out_400 = tmp_path / "out_400"
-        args_400 = build_arg_parser().parse_args([
-            "--input", str(csv_400),
-            "--output-dir", str(out_400),
-        ])
-        res_400 = run_analysis(args_400)
-        assert res_400["analysis_a"]["assigned_class"] == "S1"
-        assert res_400["analysis_b"]["assigned_class"] == "S2"
-        assert res_400["s_worst"] == "S2"
-        assert (out_400 / "plots" / "04_subclass_a_dv_cascade.png").is_file()
-        report_400 = (out_400 / "summary_report.md").read_text(encoding="utf-8")
-        # При ретро-переклассификации v1.0 CSV (max V_perp = 8.15 < 12.0) механизм ditch_mechanism тоже обновляется
-        assert "Hard Ditch Bottom Impact" not in report_400
-        assert "**Moderate Rollover Risk:** 15" in report_400
+    # 3. Проверка 100% согласованности отчёта канонической 400-прогонной кампании v1.1
+    assert "Hard Ditch Bottom Impact" not in generated_report
+    assert "**Moderate Rollover Risk:** 19" in generated_report
+    assert "**High-Speed Soil-Trip Rollover:** 4" in generated_report
 
 
 def test_loader_recomputes_ditch_mechanism_from_kinematics(tmp_path: Path):

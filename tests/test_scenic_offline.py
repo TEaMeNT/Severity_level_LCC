@@ -65,7 +65,7 @@ def test_scenic_offline_scene_generation_500_per_subclass(subclass: str):
 
 
 def test_run_ids_prng_fast_forward_matches_baseline_csv(baseline_csv_path: Path):
-    """Проверка 1-в-1 совпадения PRNG-перемотки (--run-ids) с эталонными прогонами v1.0."""
+    """Проверка 1-в-1 совпадения PRNG-перемотки (--run-ids) с каноническими прогонами v1.1 (N=400)."""
     _, map_xodr_path = resolve_map_assets()
     scenarios = {
         s: scenic.scenarioFromFile(SCENIC_PATH, params={'subclass': s, 'map': map_xodr_path, 'timestep': 0.01})
@@ -74,11 +74,11 @@ def test_run_ids_prng_fast_forward_matches_baseline_csv(baseline_csv_path: Path)
     with open(baseline_csv_path, mode='r', encoding='utf-8-sig') as f:
         rows = {int(r['run_id']): r for r in csv.DictReader(f)}
 
-    selected = parse_run_ids(["24,43,49", "113-116", "200"], total_runs=200)
-    assert selected == {24, 43, 49, 113, 114, 115, 116, 200}
+    selected = parse_run_ids(["35,43,49,141", "208,220,256,289,303", "400"], total_runs=400)
+    assert selected == {35, 43, 49, 141, 208, 220, 256, 289, 303, 400}
 
     random.seed(42)
-    plan = build_campaign_plan('ALL', 'equal', 200)
+    plan = build_campaign_plan('ALL', 'equal', 400)
     replayed = {}
     for run_idx, subclass in enumerate(plan, start=1):
         if run_idx > max(selected):

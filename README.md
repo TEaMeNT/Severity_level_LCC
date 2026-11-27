@@ -43,7 +43,7 @@ Severity_level_LCC/
 │           ├── report.py
 │           └── cli.py
 ├── tests/                            # Постоянный оффлайн-набор автотестов (pytest)
-│   ├── conftest.py                   # Общие фикстуры путей и эталонного CSV v1.0-severity-baseline
+│   ├── conftest.py                   # Общие фикстуры путей и канонического CSV v1.1-severity-final (N=400)
 │   ├── test_schema_and_config.py
 │   ├── test_severity_classifiers.py
 │   ├── test_driver_model.py
@@ -103,8 +103,8 @@ C:\CARLA\CarlaUE4.exe
 # 0. Стендовая калибровка торможения (FrictionScale) на асфальте и гравийной обочине:
 python test_shoulder_friction.py --timestep 0.01
 
-# 1. Эталонная кампания Severity S (100 Подкласс А + 100 Подкласс B) в пассивном режиме:
-python runner.py --runs 200 --mode equal --driver-post-shock passive --timestep 0.01 --seed 42 --output results/lcc_hara_results.csv --log-frames --clear
+# 1. Финальная кампания Severity S (200 Подкласс А + 200 Подкласс B) в пассивном режиме:
+python runner.py --runs 400 --mode equal --driver-post-shock passive --timestep 0.01 --seed 42 --output results/lcc_hara_results.csv --clear
 
 # 2. Исследование только Подкласса А (боковой удар и ограждение, 50 прогонов):
 python runner.py --subclass A --runs 50 --timestep 0.01
@@ -113,14 +113,14 @@ python runner.py --subclass A --runs 50 --timestep 0.01
 python runner.py --subclass B --runs 50 --timestep 0.01
 
 # 4. Кампания Controllability C (парная кампания с активным парированием заноса):
-python runner.py --runs 200 --mode equal --driver-post-shock active --timestep 0.01 --seed 42 --output results/lcc_hara_active.csv --clear
+python runner.py --runs 400 --mode equal --driver-post-shock active --timestep 0.01 --seed 42 --output results/lcc_hara_active.csv --clear
 
 # 5. Запуск с отображением визуального окна CARLA для отладки:
 python runner.py --subclass A --runs 2 --timestep 0.01 --render
 
-# 6. Выборочный реплей конкретных прогонов эталонной кампании (--run-ids, быстрая перемотка PRNG):
-python runner.py --runs 200 --mode equal --seed 42 --run-ids 113 --driver-post-shock passive --render --output scratch/replay_113.csv --clear
-python runner.py --runs 200 --mode equal --seed 42 --run-ids 24,49,113-116 --driver-post-shock active --output scratch/replay_subset.csv --clear
+# 6. Выборочный реплей конкретных прогонов финальной кампании (--run-ids, быстрая перемотка PRNG):
+python runner.py --runs 400 --mode equal --seed 42 --run-ids 220 --driver-post-shock passive --render --output scratch/replay_220.csv --clear
+python runner.py --runs 400 --mode equal --seed 42 --run-ids 35,49,220,256,289,303 --driver-post-shock active --output scratch/replay_subset.csv --clear
 ```
 
 ### 5. Статистический анализ и генерация отчетов (`analyze_results.py`)
@@ -131,7 +131,7 @@ python analyze_results.py --input results/lcc_hara_results.csv --active-input re
 Команда формирует итоговый аналитический отчёт `results/summary_report.md` и 5 публикационных графиков (300 DPI) в папке `results/plots/`.
 
 ### 6. Запуск оффлайн-автотестов (`pytest`)
-Постоянный набор автотестов проверяет схему 25 колонок CSV, классификаторы `S0–S3` и Variant B (включая эталонные кейсы `v1.0-severity-baseline`), изолированную модель водителя `src/hara_lcc/driver/`, статистику/ASIL/рендер отчёта, генерацию 5 графиков и оффлайн-сэмплирование сцен Scenic (`N = 500` на подкласс, `0` коллизий спавна) **без запущенной CARLA**:
+Постоянный набор автотестов проверяет схему 25 колонок CSV, классификаторы `S0–S3` и Variant B (включая канонический датасет `v1.1-severity-final`, `N = 400`), изолированную модель водителя `src/hara_lcc/driver/`, статистику/ASIL/рендер отчёта, генерацию 5 графиков и оффлайн-сэмплирование сцен Scenic (`N = 500` на подкласс, `0` коллизий спавна) **без запущенной CARLA**:
 ```bash
 python -m pytest -v
 ```
@@ -150,7 +150,7 @@ python -m pytest -v
 | **`--runs`** | `int` | `20` | **Общее количество запусков** сценария в кампании. |
 | **`--timestep`** | `float` | `0.01` | **Шаг интегратора PhysX $dt$** в секундах (рекомендуется `0.01` для 100 Гц со стабильным substepping). |
 | **`--seed`** | `int` | `42` | **Случайное зерно генератора PRNG** для строгой детерминированной воспроизводимости начальных сцен и задержек водителя. |
-| **`--run-ids`** | `str...` | `None` (все) | **Выборочный реплей конкретных номеров прогонов** (1-based) из плана кампании с точной оффлайн-перемоткой PRNG. Поддерживает одиночные ID (`113`), списки (`24,49,113`) и диапазоны (`113-116`). Для реплея эталона `v1.0` указывайте те же `--runs 200 --mode equal --seed 42`. |
+| **`--run-ids`** | `str...` | `None` (все) | **Выборочный реплей конкретных номеров прогонов** (1-based) из плана кампании с точной оффлайн-перемоткой PRNG. Поддерживает одиночные ID (`220`), списки (`35,49,220`) и диапазоны (`220-225`). Для реплея канонической кампании `v1.1` указывайте те же `--runs 400 --mode equal --seed 42`. |
 | **`--output`** | `str` (путь к CSV) | `results/lcc_hara_results.csv` | Путь для сохранения итогового 25-колоночного CSV-файла. |
 | **`--map-dir`** | `str` (путь к папке) | `maps/assets` | Пользовательский путь к папке с картой OpenDRIVE `map_ditch.xodr` (`DEFAULT_MAPS_DIR = maps/assets`). |
 | **`--log-frames`** | флаг | `False` | **Покадровое логирование (`61` колонка):** сохраняет телеметрию `Ego` и `Target` каждого прогона в `results/frame_logs/` (с контролем квоты `1 ГБ` и резерва диска `1.5 ГБ`). |
